@@ -1,0 +1,463 @@
+#!/usr/bin/env python3
+"""
+Simple Airflow DAG Miner for Dataset Creation
+
+Extracts DAGs from Airflow repositories with minimal, focused metadata
+for instruction generation and ML training.
+
+Usage:
+    python airflow_dag_miner.py --versions 2.7.2,2.8.4,2.9.3,3.0.0,3.0.1,3.0.6 --output dags_dataset.jsonl
+"""
+
+import argparse
+import ast
+import json
+import re
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+class SimpleAirflowDAGMiner:
+    """Simple DAG miner focused on core metadata for instruction generation."""
+
+    def __init__(self):
+        self.github_api_base = "https://api.github.com/repos/apache/airflow"
+
+        # Core operator patterns to detect
+        self.operator_patterns = [
+            r'(\w+Operator)\(',
+            r'(\w+Sensor)\(',
+        ]
+
+        # No longer needed - we search for all example_*.py files across the repo
+
+    def get_version_major(self, version: str) -> str:
+        """Get major version (2.x or 3.x)."""
+        major = version.split('.')[0]
+        return f"{major}.x"
+
+    def fetch_dag_files(self, version: str) -> tuple:
+        """Fetch all example_*.py files via GitHub API."""
+        # Try only specific version tags, no fallback to main
+        refs_to_try = [f"v{version}", f"{version}"]
+
+        for ref in refs_to_try:
+            try:
+                # Use GitHub Tree API to get all files in one call
+                url = f"{self.github_api_base}/git/trees/{ref}?recursive=1"
+                logger.info(f"Fetching tree from {url}")
+
+                response = requests.get(url, timeout=30)
+                if response.status_code == 200:
+                    tree_data = response.json()
+                    dag_records = self._process_tree_files(tree_data, version, ref)
+                    return dag_records, None
+                else:
+                    logger.debug(f"Tag {ref} not found: {response.status_code}")
+
+            except Exception as e:
+                logger.debug(f"Error fetching tree for {ref}: {e}")
+                continue
+
+        # No specific version tag found
+        logger.warning(f"No tag found for version {version} (tried: v{version}, {version})")
+        return [], f"No git tag found for version {version}"
+
+    def _process_tree_files(self, tree_data: Dict, version: str, ref: str) -> List[Dict]:
+        """Process files from GitHub Tree API response."""
+        dag_records = []
+
+        # Simple approach: get ALL example_*.py files across the entire repository
+        python_files = []
+        for item in tree_data.get('tree', []):
+            if (item['type'] == 'blob' and
+                item['path'].split('/')[-1].startswith('example_') and
+                item['path'].endswith('.py')):
+                python_files.append(item)
+
+        logger.info(f"Found {len(python_files)} example_*.py files across repository")
+
+        # Get all file paths for internal import detection
+        all_repo_files = [item['path'] for item in tree_data.get('tree', []) if item['type'] == 'blob']
+
+        # Process files in parallel
+        dag_records = self._process_files_parallel(python_files, version, ref, all_repo_files)
+        return dag_records
+
+    def _download_file(self, raw_url: str, file_path: str) -> tuple:
+        """Download single file with error handling."""
+        try:
+            response = requests.get(raw_url, timeout=30)
+            if response.status_code == 200:
+                return file_path, response.text, None
+            else:
+                return file_path, None, f"HTTP {response.status_code}"
+        except Exception as e:
+            return file_path, None, str(e)
+
+    def _process_files_parallel(self, python_files: List[Dict], version: str, ref: str, all_repo_files: List[str]) -> List[Dict]:
+        """Process files in parallel with graceful error handling."""
+        dag_records = []
+
+        # Prepare download tasks
+        download_tasks = []
+        for file_item in python_files:
+            raw_url = f"https://raw.githubusercontent.com/apache/airflow/{ref}/{file_item['path']}"
+            download_tasks.append((raw_url, file_item))
+
+        logger.info(f"Downloading {len(download_tasks)} files in parallel...")
+
+        # Download files in parallel (max 8 threads to be polite)
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            future_to_file = {
+                executor.submit(self._download_file, task[0], task[1]['path']): task[1]
+                for task in download_tasks
+            }
+
+            completed = 0
+            for future in as_completed(future_to_file):
+                file_item = future_to_file[future]
+                file_path, content, error = future.result()
+
+                completed += 1
+                if completed % 10 == 0 or completed == len(download_tasks):
+                    logger.info(f"Downloaded {completed}/{len(download_tasks)} files")
+
+                if error:
+                    logger.warning(f"Failed to download {file_path}: {error}")
+                    continue
+
+                if not content:
+                    continue
+
+                try:
+                    # Check if it's actually a DAG
+                    if self._is_dag_file(content):
+                        # Remove license headers while preserving functional comments
+                        cleaned_content = self._remove_license_headers(content)
+
+                        # Create file_info dict for compatibility
+                        file_info = {'name': file_item['path'].split('/')[-1]}
+
+                        # Single-pass multifile detection and combination
+                        final_content, included_files, is_multifile = self._process_multifile_dag(
+                            cleaned_content, all_repo_files
+                        )
+
+                        metadata = self._extract_core_metadata(final_content, version, file_info, is_multifile, included_files)
+
+                        dag_record = {
+                            'metadata': metadata,
+                            'content': final_content,
+                            'extracted_at': datetime.now().isoformat(),
+                        }
+
+                        dag_records.append(dag_record)
+
+                except Exception as e:
+                    logger.warning(f"Error processing {file_path}: {e}")
+                    continue
+
+        logger.info(f"Successfully processed {len(dag_records)} DAG files")
+        return dag_records
+
+    def _is_dag_file(self, content: str) -> bool:
+        """Check if file contains DAG definition."""
+        dag_indicators = [
+            r'from airflow import DAG',
+            r'from airflow\.models import DAG',
+            r'@dag\(',
+            r'DAG\(',
+        ]
+
+        for pattern in dag_indicators:
+            if re.search(pattern, content, re.MULTILINE):
+                return True
+        return False
+
+    def _extract_core_metadata(self, content: str, version: str, file_info: Dict, is_multifile: bool = False, included_files: List[str] = None) -> Dict:
+        """Extract only the 5 core metadata fields."""
+        syntax_valid, failure_reason = self._validate_syntax(content)
+
+        metadata = {
+            'syntax_valid': syntax_valid,
+            'airflow_version': version,
+            'is_multifile': is_multifile,
+            'line_count': len(content.splitlines()),
+            'operators': self._extract_operators(content),
+            'file_name': file_info['name'],
+        }
+
+        # Add failure reason if syntax is invalid
+        if not syntax_valid and failure_reason:
+            metadata['syntax_error'] = failure_reason
+
+        # Add included files if any
+        if included_files:
+            metadata['included_files'] = included_files
+
+        return metadata
+
+    def _validate_syntax(self, content: str) -> tuple:
+        """Check if Python syntax is valid and can be compiled."""
+        try:
+            # First check AST parsing
+            ast.parse(content)
+        except SyntaxError as e:
+            return False, f"AST parse error: {str(e).split('(')[0].strip()}"
+        except Exception as e:
+            return False, f"AST error: {type(e).__name__}"
+
+        try:
+            # Then check compilation
+            compile(content, '<dag>', 'exec')
+        except SyntaxError as e:
+            return False, f"Compile error: {str(e).split('(')[0].strip()}"
+        except Exception as e:
+            return False, f"Compile error: {type(e).__name__}"
+
+        return True, None
+
+
+    def _process_multifile_dag(self, content: str, all_repo_files: List[str]) -> tuple:
+        """
+        Single-pass detection of multi-file DAGs (metadata only).
+
+        Returns tuple of (original_content, included_files, is_multifile)
+        """
+        # Find internal dependencies in one pass
+        dependency_paths = self._find_internal_dependencies(content, all_repo_files)
+
+        # If no dependencies found, it's single-file
+        if not dependency_paths:
+            return content, [], False
+
+        # Multi-file detected - return metadata only (no file combination)
+        included_files = [dep_path.split('/')[-1] for dep_path in dependency_paths]
+
+        return content, included_files, True
+
+    def _find_internal_dependencies(self, content: str, all_repo_files: List[str]) -> List[str]:
+        """Find internal imports that come after the last airflow.* import."""
+        lines = content.splitlines()
+
+        # Find the last line with an airflow.* import
+        last_airflow_import_line = -1
+        for i, line in enumerate(lines):
+            if re.search(r'from\s+airflow\b', line.strip()) or re.search(r'import\s+airflow\b', line.strip()):
+                last_airflow_import_line = i
+
+        # If no airflow imports found, assume no internal dependencies
+        if last_airflow_import_line == -1:
+            return []
+
+        # Look for imports after the last airflow import
+        internal_modules = set()
+        for i in range(last_airflow_import_line + 1, len(lines)):
+            line = lines[i].strip()
+
+            # Stop at first non-import, non-comment, non-empty line
+            if line and not line.startswith('#') and not line.startswith('from ') and not line.startswith('import '):
+                break
+
+            # Extract module from import statements
+            if line.startswith('from ') and ' import ' in line:
+                match = re.match(r'from\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+import', line)
+                if match:
+                    module = match.group(1)
+                    # Skip standard library and common packages
+                    if not module.startswith(('airflow', 'datetime', 'os', 'sys', 'typing', 'json', 're', 'pathlib', 'logging')):
+                        internal_modules.add(module)
+
+        # Find actual file paths for these modules
+        dependency_paths = []
+        for module in internal_modules:
+            module_path = module.replace('.', '/')
+            potential_paths = [
+                f"{module_path}.py",
+                f"{module_path}/__init__.py",
+            ]
+
+            for path in potential_paths:
+                if path in all_repo_files:
+                    dependency_paths.append(path)
+                    logger.debug(f"Found dependency: {module} -> {path}")
+                    break
+
+        if dependency_paths:
+            logger.info(f"Found {len(dependency_paths)} internal dependencies")
+
+        return dependency_paths
+
+
+    def _extract_operators(self, content: str) -> List[str]:
+        """Extract operator types used in the DAG."""
+        operators = set()
+
+        for pattern in self.operator_patterns:
+            matches = re.findall(pattern, content)
+            operators.update(matches)
+
+        # Also check for TaskFlow decorators
+        if re.search(r'@task\b', content):
+            operators.add('@task')
+        if re.search(r'@dag\b', content):
+            operators.add('@dag')
+
+        return sorted(list(operators))
+
+    def _remove_license_headers(self, content: str) -> str:
+        """Remove license/copyright headers while preserving functional comments."""
+        lines = content.splitlines()
+
+        # Find first and last lines containing license-related keywords
+        license_keywords = ['license', 'copyright', 'apache', 'licensed']
+        first_license_line = None
+        last_license_line = None
+
+        for i, line in enumerate(lines):
+            line_lower = line.lower()
+            if any(keyword in line_lower for keyword in license_keywords):
+                if first_license_line is None:
+                    first_license_line = i
+                last_license_line = i
+
+        # If license block found, remove it
+        if first_license_line is not None and last_license_line is not None:
+            # Remove license block and any trailing empty lines
+            remaining_lines = lines[last_license_line + 1:]
+
+            # Skip empty lines after license block
+            while remaining_lines and not remaining_lines[0].strip():
+                remaining_lines.pop(0)
+
+            return '\n'.join(remaining_lines)
+
+        # No license found, return original content
+        return content
+
+    def mine_versions(self, versions: List[str]) -> tuple:
+        """Mine DAGs from multiple Airflow versions."""
+        all_dags = []
+        missing_versions = []
+
+        for version in versions:
+            logger.info(f"Mining Airflow version {version}")
+            dag_records, error = self.fetch_dag_files(version)
+
+            if error:
+                missing_versions.append({"version": version, "reason": error})
+                logger.info(f"Skipped version {version}: {error}")
+            else:
+                all_dags.extend(dag_records)
+                logger.info(f"Extracted {len(dag_records)} DAGs from version {version}")
+
+        logger.info(f"Total DAGs extracted: {len(all_dags)}")
+        if missing_versions:
+            logger.info(f"Missing versions: {[v['version'] for v in missing_versions]}")
+
+        return all_dags, missing_versions
+
+    def save_results(self, dags: List[Dict], missing_versions: List[Dict], output_file: str):
+        """Save results to JSONL format."""
+        output_path = Path(output_file)
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            for dag in dags:
+                json.dump(dag, f, ensure_ascii=False)
+                f.write('\n')
+
+        logger.info(f"Saved {len(dags)} DAGs to {output_path}")
+
+        # Generate and save summary
+        summary = self._generate_summary(dags, missing_versions)
+        summary_path = output_path.with_suffix('.summary.json')
+
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Saved summary to {summary_path}")
+
+    def _generate_summary(self, dags: List[Dict], missing_versions: List[Dict]) -> Dict:
+        """Generate summary statistics."""
+        summary = {
+            'total_dags': len(dags),
+            'syntax_valid_count': 0,
+            'multifile_count': 0,
+            'versions': {},
+            'operators': {},
+            'length_distribution': {
+                'short': 0,    # <50 lines
+                'medium': 0,   # 50-150 lines
+                'long': 0      # >150 lines
+            },
+            'missing_versions': missing_versions
+        }
+
+        for dag in dags:
+            metadata = dag['metadata']
+
+            # Count valid syntax
+            if metadata['syntax_valid']:
+                summary['syntax_valid_count'] += 1
+
+            # Count multifile
+            if metadata['is_multifile']:
+                summary['multifile_count'] += 1
+
+            # Version counts
+            version = metadata['airflow_version']
+            summary['versions'][version] = summary['versions'].get(version, 0) + 1
+
+            # Operator counts
+            for operator in metadata['operators']:
+                summary['operators'][operator] = summary['operators'].get(operator, 0) + 1
+
+            # Length distribution
+            line_count = metadata['line_count']
+            if line_count < 50:
+                summary['length_distribution']['short'] += 1
+            elif line_count <= 150:
+                summary['length_distribution']['medium'] += 1
+            else:
+                summary['length_distribution']['long'] += 1
+
+        return summary
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Simple Airflow DAG Miner")
+    parser.add_argument(
+        '--versions',
+        required=True,
+        help='Comma-separated Airflow versions (e.g., 2.7.2,2.8.4,2.9.3,3.0.0,3.0.1,3.0.6)'
+    )
+    parser.add_argument(
+        '--output',
+        default='simple_dags_dataset.jsonl',
+        help='Output JSONL file'
+    )
+
+    args = parser.parse_args()
+
+    versions = [v.strip() for v in args.versions.split(',')]
+
+    logger.info(f"Starting simple DAG mining for versions: {versions}")
+
+    miner = SimpleAirflowDAGMiner()
+    dags, missing_versions = miner.mine_versions(versions)
+    miner.save_results(dags, missing_versions, args.output)
+
+    logger.info("Simple DAG mining completed!")
+
+
+if __name__ == "__main__":
+    main()

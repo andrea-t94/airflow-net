@@ -4,16 +4,17 @@ Done
 
 
 To do
-- super flow (for retrials?) + hitting 429 (too many requests) + I pay a lot -> try with asyncio + rate limiting and cheaper model/smaller prompt (one instruction), less retry
-- scrape for qa
-- analyse most common Dag failures from source code
-- inject failures into current correct DAGs for debugging
+- super slow (for retrials?) + hitting 429 (too many requests) + I pay a lot -> try with asyncio + rate limiting and cheaper model/smaller prompt (one instruction), less retry
+- add version in instruction
+- create an mcp that enable semantic search on the whole airflow github, based on version
+
 
 
 Next steps
 - airflow dag compiler to increase data quality
 - LLM as teacher that generate more instructions per dag and even new dags
 - test asyncio for LLM call, might be more performant
+- inject known failures (based on my experience and on mosto common I find in source code) into current correct DAGs implementations dataset for creating a troubleshooting dataset for finetuning
 
 
 Dag miner overview

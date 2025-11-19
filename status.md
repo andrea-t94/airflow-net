@@ -4,16 +4,17 @@ Done
 
 
 To do
-- super slow (for retrials?) + hitting 429 (too many requests) + I pay a lot -> try with asyncio + rate limiting and cheaper model/smaller prompt (one instruction), less retry
-- add version in instruction
+- generate other instructions augmenting the existing ones without LLM
+- ats compiler and discard the non good ones to finalise dataset
 - create an mcp that enable semantic search on the whole airflow github, based on version
 
 
 
 Next steps
-- airflow dag compiler to increase data quality
 - LLM as teacher that generate more instructions per dag and even new dags
-- test asyncio for LLM call, might be more performant
+- airflow dag compiler to increase data quality
+- generalise api calls to any LLM 
+- add a way to score code complexity (euristic) and analyse performances for different complexity and version
 - inject known failures (based on my experience and on mosto common I find in source code) into current correct DAGs implementations dataset for creating a troubleshooting dataset for finetuning
 
 

@@ -1,0 +1,41 @@
+# Instruction Generation Configuration
+
+# Model settings
+model:
+  name: "claude-3-5-haiku-20241022"
+  temperature: 0.3
+  max_tokens: 600
+
+# Generation settings
+generation:
+  max_dags: null  # null = process all DAGs
+  version: "v1"
+  output_file: "airflow_instructions.jsonl"
+  instruction_source: "claude-3.5"
+
+# Note: Input is always datasets/raw/dags.jsonl
+# Output files:
+#   Full run: datasets/processed/airflow_instructions.jsonl
+#   Test run: datasets/processed/test_airflow_instructions.jsonl
+
+# Prompt template
+prompt_template: |
+  Analyze this Airflow DAG and create a clear learning instruction.
+
+  DAG CODE:
+  ```python
+  {content}
+  ```
+
+  Airflow Version: {airflow_version}
+
+  Respond with only a JSON object:
+  {{
+  "instruction": "Clear, educational instruction explaining what to build (2-3 sentences max)"
+  }}
+
+  The instruction should be actionable and explain WHAT to build, not HOW to build it.
+
+# API settings
+api:
+  poll_interval: 30  # seconds between batch status checks

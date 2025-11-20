@@ -1,0 +1,1 @@
+1. Decided to generate 3 instructions per request. This proved to be really cost effective using batch messages, I spent <2$ (with one rewuest for one instruction at time >5)

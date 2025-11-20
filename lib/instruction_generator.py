@@ -242,8 +242,10 @@ class ClaudeBatchInstructionGenerator:
         instructions = []
         stats = {
             'total_processed': 0,
-            'successful_generations': 0,
-            'failed_generations': 0,
+            'successful_requests': 0,  # Requests that generated at least 1 instruction
+            'failed_requests': 0,      # Requests that generated 0 instructions
+            'total_instructions_generated': 0,  # Total instruction records created
+            'expected_instructions_per_request': 3,
             'api_calls': len(results)
         }
 
@@ -262,34 +264,51 @@ class ClaudeBatchInstructionGenerator:
                     if message_content.startswith('```json'):
                         message_content = message_content.replace('```json', '').replace('```', '').strip()
 
-                    analysis = json.loads(message_content)
+                    # Parse multiple JSON objects (one per line)
+                    instruction_lines = [line.strip() for line in message_content.split('\n') if line.strip()]
+                    parsed_instructions = []
 
-                    if "instruction" in analysis and custom_id in dag_records:
+                    for line in instruction_lines:
+                        try:
+                            instruction_obj = json.loads(line)
+                            if "instruction" in instruction_obj:
+                                parsed_instructions.append(instruction_obj)
+                        except json.JSONDecodeError:
+                            # Skip invalid JSON lines
+                            continue
+
+                    # Create separate records for each instruction
+                    if parsed_instructions and custom_id in dag_records:
                         dag_record = dag_records[custom_id]
 
-                        instruction_record = {
-                            'instruction': analysis['instruction'],
-                            'input': {
-                                'airflow_version': dag_record['metadata']['airflow_version']
-                            },
-                            'output': dag_record['content'],
-                            'metadata': {
-                                'file_name': custom_id,
-                                'instruction_source': instruction_source
+                        for i, analysis in enumerate(parsed_instructions):
+                            instruction_record = {
+                                'instruction': analysis['instruction'],
+                                'input': {
+                                    'airflow_version': dag_record['metadata']['airflow_version']
+                                },
+                                'output': dag_record['content'],
+                                'metadata': {
+                                    'file_name': f"{custom_id}_variant_{i+1}",
+                                    'instruction_source': instruction_source,
+                                    'variant_number': i + 1
+                                }
                             }
-                        }
 
-                        instructions.append(instruction_record)
-                        stats['successful_generations'] += 1
+                            instructions.append(instruction_record)
+
+                        # Count this as a successful request since we got at least 1 instruction
+                        stats['successful_requests'] += 1
+                        stats['total_instructions_generated'] += len(parsed_instructions)
                     else:
-                        stats['failed_generations'] += 1
+                        stats['failed_requests'] += 1
 
                 except (json.JSONDecodeError, Exception):
-                    stats['failed_generations'] += 1
+                    stats['failed_requests'] += 1
 
             else:
                 # Error case
-                stats['failed_generations'] += 1
+                stats['failed_requests'] += 1
 
         # Save instructions
         logger.info(f"💾 Saving {len(instructions)} instructions to {output_file}...")

@@ -4,15 +4,13 @@ Done
 
 
 To do
-- generate other instructions augmenting the existing ones without LLM
-- ats compiler and discard the non good ones to finalise dataset
+- evaluator on top of ast compiler (airflow dag compiler?) and discard the non good ones to finalise dataset
 - create an mcp that enable semantic search on the whole airflow github, based on version
 
 
 
 Next steps
-- LLM as teacher that generate more instructions per dag and even new dags
-- airflow dag compiler to increase data quality
+- LLM as teacher that generate new type of instructions (debugging)
 - generalise api calls to any LLM 
 - add a way to score code complexity (euristic) and analyse performances for different complexity and version
 - inject known failures (based on my experience and on mosto common I find in source code) into current correct DAGs implementations dataset for creating a troubleshooting dataset for finetuning

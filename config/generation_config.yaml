@@ -4,7 +4,7 @@
 model:
   name: "claude-3-5-haiku-20241022"
   temperature: 0.3
-  max_tokens: 600
+  max_tokens: 800
 
 # Generation settings
 generation:
@@ -20,7 +20,7 @@ generation:
 
 # Prompt template
 prompt_template: |
-  Analyze this Airflow DAG and create a clear learning instruction.
+  Analyze this Airflow DAG and create 3 different clear learning instructions for the same code.
 
   DAG CODE:
   ```python
@@ -29,12 +29,17 @@ prompt_template: |
 
   Airflow Version: {airflow_version}
 
-  Respond with only a JSON object:
-  {{
-  "instruction": "Clear, educational instruction explaining what to build (2-3 sentences max)"
-  }}
+  Create 3 variations that approach explaining the DAG from different angles:
+  1. Focus on the business/functional purpose
+  2. Focus on the technical workflow structure
+  3. Focus on the data processing aspects
 
-  The instruction should be actionable and explain WHAT to build, not HOW to build it.
+  Respond with exactly 3 separate JSON objects, each on its own line:
+  {{"instruction": "Clear, educational instruction explaining what to build (max 2 sentences)"}}
+  {{"instruction": "Clear, educational instruction explaining what to build (max 2 sentences)"}}
+  {{"instruction": "Clear, educational instruction explaining what to build (max 2 sentences)"}}
+
+  Each instruction should be actionable and explain WHAT to build, not HOW to build it. Keep each instruction to maximum 2 sentences.
 
 # API settings
 api:

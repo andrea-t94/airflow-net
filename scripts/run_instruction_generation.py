@@ -79,14 +79,11 @@ def main():
 
         if stats:
             print(f"\n✅ Generation completed successfully!")
-            print(f"📊 Generated: {stats['successful_generations']} instructions")
-            print(f"📈 Success rate: {stats['successful_generations']}/{stats['total_processed']} "
-                  f"({stats['successful_generations']/stats['total_processed']*100:.1f}%)")
+            print(f"📊 Statistics:")
+            for key, value in stats.items():
+                if key != 'generation_metadata':  # Skip the nested metadata
+                    print(f"   {key}: {value}")
             print(f"⏱️  Total time: {elapsed_time:.1f} seconds")
-            print(f"⚡ Speed: {stats['total_processed']/elapsed_time:.1f} DAGs/second")
-
-            if stats['failed_generations'] > 0:
-                print(f"\n⚠️  {stats['failed_generations']} DAGs failed processing")
 
         return 0
 

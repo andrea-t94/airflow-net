@@ -76,11 +76,18 @@ class DAGValidationAnalyzer:
     def _process_dag_record(self, dag_record: dict, line_num: int):
         """Process a single DAG record from the dataset."""
         try:
-            # Extract metadata
+            # Extract metadata and handle both formats (raw dags vs generated dags)
             metadata = dag_record.get('metadata', {})
-            filename = metadata.get('file_name', f'unknown_line_{line_num}')
-            airflow_version = metadata.get('airflow_version', 'unknown')
-            content = dag_record.get('content', '')
+            input_data = dag_record.get('input', {})
+
+            # Get filename from metadata or generate one
+            filename = metadata.get('file_name', f'generated_dag_line_{line_num}')
+
+            # Get airflow version from input data or metadata
+            airflow_version = input_data.get('airflow_version') or metadata.get('airflow_version', 'unknown')
+
+            # Get content from either 'output' (generated) or 'content' (raw) field
+            content = dag_record.get('output', dag_record.get('content', ''))
 
             # Generate unique ID for same filename+version combinations
             key = f"{filename}_{airflow_version}"
@@ -135,8 +142,8 @@ def main():
     """Run DAG validation analysis."""
     parser = argparse.ArgumentParser(description="Airflow DAG Validation Analyzer")
     parser.add_argument('--input',
-                       default='datasets/raw/dags.jsonl',
-                       help='Input JSONL dataset file (default: datasets/raw/dags.jsonl)')
+                       default='datasets/inference/qwen2-1_5b-instruct-q4_k_m.jsonl',
+                       help='Input JSONL dataset file (default: datasets/inference/qwen2-1_5b-instruct-q4_k_m.jsonl)')
     parser.add_argument('--output',
                        default='datasets/eval/dag_validation_report.csv',
                        help='Output CSV file (default: datasets/eval/dag_validation_report.csv)')

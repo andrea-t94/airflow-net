@@ -1,1 +1,2 @@
 1. Decided to generate 3 instructions per request. This proved to be really cost effective using batch messages, I spent <2$ (with one rewuest for one instruction at time >5)
+2. created a lightweight DAG parser that checks basic things (e.g. missing import checks, Xcom, task groups, connection and task are properly working, Operators and Sesnor are properly inputed)

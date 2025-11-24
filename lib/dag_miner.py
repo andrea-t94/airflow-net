@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
 import logging
+from dag_parser import DAGValidator
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ class SimpleAirflowDAGMiner:
             logger.info("🔑 Using GitHub token for authenticated requests")
         else:
             logger.warning("⚠️ No GitHub token found - using unauthenticated requests (60/hour limit)")
+
+        # Initialize DAG validator for enhanced validation
+        self.validator = DAGValidator()
 
     def _get_github_token(self) -> str:
         """Get GitHub token from environment or .env file."""
@@ -197,19 +201,31 @@ class SimpleAirflowDAGMiner:
 
     def _extract_core_metadata(self, content: str, version: str, file_info: Dict, is_multifile: bool = False, included_files: List[str] = None) -> Dict:
         """Extract core metadata fields for instruction generation."""
-        syntax_valid, failure_reason = self._validate_syntax(content)
+        # Use DAGValidator for comprehensive validation
+        errors = self.validator.validate_content(content, file_info['name'])
+
+        # Get extracted DAG info
+        dag_info = self.validator.dags_info.get(file_info['name'])
 
         metadata = {
-            'syntax_valid': syntax_valid,
+            'syntax_valid': len(errors) == 0,
             'airflow_version': version,
             'is_multifile': is_multifile,
             'line_count': len(content.splitlines()),
             'file_name': file_info['name'],
         }
 
-        # Add failure reason if syntax is invalid
-        if not syntax_valid and failure_reason:
-            metadata['syntax_error'] = failure_reason
+        # Add validation errors if any
+        if errors:
+            metadata['validation_errors'] = [str(error) for error in errors]
+
+        # Add DAG structure info from enhanced validation
+        if dag_info:
+            metadata.update({
+                'task_count': len(dag_info.get('task_ids', {})),
+                'has_dependencies': bool(dag_info.get('task_dependencies', {})),
+                'dag_count': len(dag_info.get('dag_ids', [])),
+            })
 
         # Add included files if any
         if included_files:
@@ -217,25 +233,6 @@ class SimpleAirflowDAGMiner:
 
         return metadata
 
-    def _validate_syntax(self, content: str) -> tuple:
-        """Check if Python syntax is valid and can be compiled."""
-        try:
-            # First check AST parsing
-            ast.parse(content)
-        except SyntaxError as e:
-            return False, f"AST parse error: {str(e).split('(')[0].strip()}"
-        except Exception as e:
-            return False, f"AST error: {type(e).__name__}"
-
-        try:
-            # Then check compilation
-            compile(content, '<dag>', 'exec')
-        except SyntaxError as e:
-            return False, f"Compile error: {str(e).split('(')[0].strip()}"
-        except Exception as e:
-            return False, f"Compile error: {type(e).__name__}"
-
-        return True, None
 
     def _process_multifile_dag(self, content: str, all_repo_files: List[str]) -> tuple:
         """

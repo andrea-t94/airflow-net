@@ -1,3 +1,8 @@
+# Python version constraint: 3.9+ required for all Airflow versions (2.7.2 - 3.0.6)
+# Compatible versions: 3.9, 3.10, 3.11 (3.11 recommended for best compatibility)
+python_requires>=3.9,<3.12
+
 anthropic>=0.35.0
 requests>=2.31.0
 PyYAML>=6.0
+tox>=4.32.0

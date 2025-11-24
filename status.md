@@ -4,9 +4,9 @@ Done
 
 
 To do
-- evaluator on top of ast compiler (airflow dag compiler?) and discard the non good ones to finalise dataset
-- create an mcp that enable semantic search on the whole airflow github, based on version
-
+- try instructions on an oss sml and eval it
+- improve inference, sitll slow. Can I do stomething else?
+- one-time eval of the existed raw and processed, to check and eventually exclude the bad dags instructions with new DAG parser
 
 
 Next steps

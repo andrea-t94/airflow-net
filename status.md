@@ -4,8 +4,11 @@ Done
 
 
 To do
+- fine tune llama-server and create a script that give me latency, thorughtput and GPU utilisation so that I can compare each method (for my blog post).
+- Check if llama-server is inference agnostic, so I don't need to do it
+- try vLLM instead?
+- finalise inference investigation, save all the scripts and findings, it will become a blogpost
 - try instructions on an oss sml and eval it
-- improve inference, sitll slow. Can I do stomething else?
 - one-time eval of the existed raw and processed, to check and eventually exclude the bad dags instructions with new DAG parser
 
 

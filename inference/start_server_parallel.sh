@@ -7,8 +7,9 @@ MODEL_PATH="/Users/andreatamburri/.cache/huggingface/hub/models--Qwen--Qwen2-1.5
 ./llama.cpp/build/bin/llama-server \
     --model "$MODEL_PATH" \
     --n-gpu-layers 99 \
-    --ctx-size 2048 \
-    --parallel 4 \
+    --ctx-size 8192 \
+    --batch-size 4096 \
+    --parallel 8 \
     --cont-batching \
-    --flash-attn on \
+    --flash-attn on\
     --port 8000

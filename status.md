@@ -4,12 +4,10 @@ Done
 
 
 To do
-- fine tune llama-server and create a script that give me latency, thorughtput and GPU utilisation so that I can compare each method (for my blog post).
-- Check if llama-server is inference agnostic, so I don't need to do it
+- fine tune  llama-server + client by running benchmarsk with prompt lenght and output lenght measured via DAG dataset (for my blog post)
 - try vLLM instead?
-- finalise inference investigation, save all the scripts and findings, it will become a blogpost
-- try instructions on an oss sml and eval it
-- one-time eval of the existed raw and processed, to check and eventually exclude the bad dags instructions with new DAG parser
+- finalise inference fine tuning, save all the scripts and findings in a separate folder, it will become a blogpost
+- time to generate dags with qwne: one-time eval of the existed raw and processed, to check and eventually exclude the bad dags instructions with new DAG parser + use best inference framework to geenrate dags
 
 
 Next steps

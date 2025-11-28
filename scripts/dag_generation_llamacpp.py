@@ -166,7 +166,7 @@ def main():
     parser.add_argument('--output', help='Output JSONL file')
     parser.add_argument('--test-run', action='store_true', help='Use test dataset')
     parser.add_argument('--url', default='http://localhost:8000/v1', help='Llama Server URL')
-    parser.add_argument('--workers', type=int, default=4, help='Number of parallel requests')
+    parser.add_argument('--workers', type=int, default=8, help='Number of parallel requests')
 
     args = parser.parse_args()
 

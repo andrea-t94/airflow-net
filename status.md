@@ -4,7 +4,7 @@ Done
 
 
 To do
-- fine tune  llama-server + client by running benchmarsk with prompt lenght and output lenght measured via DAG dataset (for my blog post)
+- make possible to run benchmarsk with higher concurrent workload. It was failing for OOM issues
 - try vLLM instead?
 - finalise inference fine tuning, save all the scripts and findings in a separate folder, it will become a blogpost
 - time to generate dags with qwne: one-time eval of the existed raw and processed, to check and eventually exclude the bad dags instructions with new DAG parser + use best inference framework to geenrate dags

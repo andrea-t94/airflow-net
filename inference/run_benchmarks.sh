@@ -2,8 +2,8 @@
 set -e
 
 MODEL_PATH="${1:-/Users/andreatamburri/.cache/huggingface/hub/models--Qwen--Qwen2-1.5B-Instruct-GGUF/snapshots/c62434db644497c0ee545c690bb66a67eba6eb3f/qwen2-1_5b-instruct-q4_k_m.gguf}"
-PROMPT_TOKENS="${2:-70}"
-OUTPUT_TOKENS="${3:-1048}"
+PROMPT_TOKENS="${2:-128}"
+OUTPUT_TOKENS="${3:-4096}"
 CTX_SIZE="${4:-8192}"
 BATCH_SIZE="${5:-2048}"
 PARALLEL_WORKERS="${6:-1,2,4,8}"

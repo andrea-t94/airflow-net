@@ -33,10 +33,24 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🔹 Running llama-batched-bench (parallel workload)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+# 1. Extract the maximum number of workers from the list "1,2,4,8"
+#    This converts the comma-separated string to an array and picks the last (largest) one.
+IFS=',' read -ra WORKER_ARRAY <<< "$PARALLEL_WORKERS"
+NUM_WORKERS=${#WORKER_ARRAY[@]}
+# Get the last element using the length
+MAX_WORKERS=${WORKER_ARRAY[$NUM_WORKERS-1]}
+# 2. Calculate the context needed per user (Prompt + Output)
+TOKENS_PER_USER=$(($PROMPT_TOKENS + $OUTPUT_TOKENS))
+
+# 3. Calculate the TOTAL context required (Tokens per User * Max Workers)
+#    We add a small buffer (+128) just to be safe.
+REQUIRED_CTX=$(( $TOKENS_PER_USER * $MAX_WORKERS + 128 ))
+
+echo "🧮 Calculated required context: $REQUIRED_CTX (for $MAX_WORKERS workers)"
 
 ./llama.cpp/build/bin/llama-batched-bench \
     -m "$MODEL_PATH" \
-    -c "$CTX_SIZE" \
+    -c "$REQUIRED_CTX" \
     -b "$BATCH_SIZE" \
     -ub 512 \
     -npp "$PROMPT_TOKENS" \

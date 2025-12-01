@@ -5,9 +5,11 @@ Done
 
 To do
 - time to generate dags with llama server optimised params
+- fine tuning
 - mem bound improvements:
-- on M1: try MLX, quantised KV cache, spec decoding (not sure since 8 workers)
--  change GPU: vLLM pagedAttention (works with CUDA), bigger machine and more workers
+- - on M1: try MLX, quantised KV cache, spec decoding (not sure since 8 workers)
+-  - change GPU: vLLM pagedAttention (works with CUDA), bigger machine and more workers
+- inference repo beautify. Has to be runnable stand alone and I want to write a blog with that (how do I calculate CTX, batch, input output?)
 
 
 Next steps

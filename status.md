@@ -4,10 +4,10 @@ Done
 
 
 To do
-- make possible to run benchmarsk with higher concurrent workload. It was failing for OOM issues
-- try vLLM instead?
-- finalise inference fine tuning, save all the scripts and findings in a separate folder, it will become a blogpost
-- time to generate dags with qwne: one-time eval of the existed raw and processed, to check and eventually exclude the bad dags instructions with new DAG parser + use best inference framework to geenrate dags
+- time to generate dags with llama server optimised params
+- mem bound improvements:
+- on M1: try MLX, quantised KV cache, spec decoding (not sure since 8 workers)
+-  change GPU: vLLM pagedAttention (works with CUDA), bigger machine and more workers
 
 
 Next steps

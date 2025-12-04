@@ -4,12 +4,14 @@ Done
 
 
 To do
-- time to generate dags with llama server optimised params
-- fine tuning
+- fine tuning: 
+- - learn more about Lora QLora and quantisation. Find what best local framework I could use (MLX?)
+- - add some python instructions and reserve some for val/test, use QLora and quantised models (check HP with gemini)
 - mem bound improvements:
-- - on M1: try MLX, quantised KV cache, spec decoding (not sure since 8 workers)
--  - change GPU: vLLM pagedAttention (works with CUDA), bigger machine and more workers
+- - on M1: try MLX, quantised KV cache, not spec decoding (I am already almost at mem bandwidht, having 8 small models is bandwidth consuming, it is beneficial only if draft is really good, but we are talking about very small models here...)
+-  deploy GPUs inference: increase workers + vLLM pagedAttention and run a benchmark (TTFT, TPS, cost efficency=) + dedicated GPU quantisazton (AWQ)
 - inference repo beautify. Has to be runnable stand alone and I want to write a blog with that (how do I calculate CTX, batch, input output?)
+- quantisation, distillation, pruning?
 
 
 Next steps

@@ -69,19 +69,25 @@ Generate only the Python code for the DAG:
 
     def _generate_single_dag_task(self, record: Dict[str, Any]) -> Dict[str, Any]:
         """Worker task to process a single record."""
-        instruction = record.get('instruction', '')
-        input_data = record.get('input', {})
-        airflow_version = input_data.get('airflow_version', '2.7.2')
+        # Extract instruction from ChatML format
+        user_msg = next((m['content'] for m in record['messages'] if m['role'] == 'user'), '')
+        # Extract instruction and airflow version from user message
+        parts = user_msg.split('\n\nAirflow Version:')
+        instruction = parts[0].strip()
+        airflow_version = parts[1].strip() if len(parts) > 1 else '2.7.2'
         metadata = record.get('metadata', {})
 
         prompt = self._create_prompt(instruction, airflow_version)
 
         try:
             # Call the Server API
+            # Using optimal params from performance_evaluation.md:
+            # - max_tokens=2048 (recommended for ~90% coverage)
+            # - temperature=0.1 (deterministic generation)
             response = self.client.completions.create(
                 model="qwen",  # Name doesn't matter for local server
                 prompt=prompt,
-                max_tokens=1024,
+                max_tokens=2048,
                 temperature=0.1,
                 top_p=0.9,
                 stop=["<|im_end|>", "```"],
@@ -91,14 +97,27 @@ Generate only the Python code for the DAG:
             generated_text = response.choices[0].text
             clean_code = self._extract_code(generated_text)
 
+            # Convert to ChatML format for Qwen Coder 2.5 training
             return {
-                'instruction': instruction,
-                'input': {'airflow_version': airflow_version},
-                'output': clean_code,
+                'messages': [
+                    {
+                        'role': 'system',
+                        'content': 'You are an expert Apache Airflow developer. Generate complete, valid Airflow DAGs based on given requirements.'
+                    },
+                    {
+                        'role': 'user',
+                        'content': f"{instruction}\n\nAirflow Version: {airflow_version}"
+                    },
+                    {
+                        'role': 'assistant',
+                        'content': clean_code
+                    }
+                ],
                 'metadata': {
                     **metadata,
                     'model': 'qwen-server',
-                    'backend': 'llama-server-client'
+                    'backend': 'llama-server-client',
+                    'airflow_version': airflow_version
                 }
             }
 

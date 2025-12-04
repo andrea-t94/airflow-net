@@ -74,20 +74,33 @@ class DAGValidationAnalyzer:
         return stats
 
     def _process_dag_record(self, dag_record: dict, line_num: int):
-        """Process a single DAG record from the dataset."""
+        """Process a single DAG record from the dataset.
+
+        Supports multiple formats:
+        - ChatML format (messages array with system/user/assistant roles)
+        - Raw DAG format (content field directly)
+        """
         try:
-            # Extract metadata and handle both formats (raw dags vs generated dags)
+            # Extract metadata
             metadata = dag_record.get('metadata', {})
-            input_data = dag_record.get('input', {})
 
             # Get filename from metadata or generate one
             filename = metadata.get('file_name', f'generated_dag_line_{line_num}')
 
-            # Get airflow version from input data or metadata
-            airflow_version = input_data.get('airflow_version') or metadata.get('airflow_version', 'unknown')
+            # Get airflow version from metadata
+            airflow_version = metadata.get('airflow_version', 'unknown')
 
-            # Get content from either 'output' (generated) or 'content' (raw) field
-            content = dag_record.get('output', dag_record.get('content', ''))
+            # Extract DAG content based on format
+            if 'messages' in dag_record:
+                # ChatML format - extract from assistant message
+                content = next((m['content'] for m in dag_record['messages'] if m['role'] == 'assistant'), '')
+            elif 'content' in dag_record:
+                # Raw DAG format (datasets/raw/dags.jsonl)
+                content = dag_record['content']
+            else:
+                # Unsupported format
+                logger.warning(f"Line {line_num}: Unknown format, skipping")
+                return
 
             # Generate unique ID for same filename+version combinations
             key = f"{filename}_{airflow_version}"

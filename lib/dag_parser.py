@@ -3,13 +3,15 @@
 Lightweight Airflow DAG Validator
 Catches common syntax errors before pushing commits:
 - Duplicate task_ids
-- Circular dependencies  
+- Invalid task_id format (mimics airflow.utils.helpers.validate_key)
+- Circular dependencies
 - Invalid DAG structure
 - Import errors
 - Missing required parameters
 """
 
 import ast
+import re
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 from collections import defaultdict
@@ -77,6 +79,9 @@ class DAGValidator:
 
                 # Validate task IDs
                 content_errors.extend(self._check_duplicate_task_ids(dag_info, Path(source_name)))
+
+                # Validate task_id format
+                content_errors.extend(self._check_task_id_format(dag_info, Path(source_name)))
 
                 # Validate dependencies
                 content_errors.extend(self._check_circular_dependencies(dag_info, Path(source_name)))
@@ -269,7 +274,7 @@ class DAGValidator:
     def _check_duplicate_task_ids(self, dag_info: dict, file_path: Path) -> List[ValidationError]:
         """Check for duplicate task IDs within a DAG"""
         errors = []
-        
+
         for task_id, lines in dag_info['task_ids'].items():
             if len(lines) > 1:
                 errors.append(ValidationError(
@@ -278,7 +283,28 @@ class DAGValidator:
                     f"Duplicate task_id '{task_id}' found at lines: {', '.join(map(str, lines))}",
                     lines[0]
                 ))
-        
+
+        return errors
+
+    def _check_task_id_format(self, dag_info: dict, file_path: Path) -> List[ValidationError]:
+        """
+        Check task_id format matches Airflow's requirements.
+        Mimics airflow.utils.helpers.validate_key which enforces:
+        - Only alphanumeric characters, dashes, dots, and underscores allowed
+        - Pattern: ^[a-zA-Z0-9._-]+$
+        """
+        errors = []
+        valid_pattern = re.compile(r'^[a-zA-Z0-9._-]+$')
+
+        for task_id, lines in dag_info['task_ids'].items():
+            if not valid_pattern.match(task_id):
+                errors.append(ValidationError(
+                    str(file_path),
+                    "INVALID_TASK_ID",
+                    f"task_id '{task_id}' must contain only alphanumeric characters, dashes, dots, and underscores",
+                    lines[0]
+                ))
+
         return errors
     
     def _check_circular_dependencies(self, dag_info: dict, file_path: Path) -> List[ValidationError]:

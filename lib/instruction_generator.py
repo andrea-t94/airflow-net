@@ -282,16 +282,30 @@ class ClaudeBatchInstructionGenerator:
                         dag_record = dag_records[custom_id]
 
                         for i, analysis in enumerate(parsed_instructions):
+                            # Convert to ChatML format for Qwen Coder 2.5 training
+                            airflow_version = dag_record['metadata']['airflow_version']
+                            instruction_text = analysis['instruction']
+
                             instruction_record = {
-                                'instruction': analysis['instruction'],
-                                'input': {
-                                    'airflow_version': dag_record['metadata']['airflow_version']
-                                },
-                                'output': dag_record['content'],
+                                'messages': [
+                                    {
+                                        'role': 'system',
+                                        'content': 'You are an expert Apache Airflow developer. Generate complete, valid Airflow DAGs based on given requirements.'
+                                    },
+                                    {
+                                        'role': 'user',
+                                        'content': f"{instruction_text}\n\nAirflow Version: {airflow_version}"
+                                    },
+                                    {
+                                        'role': 'assistant',
+                                        'content': dag_record['content']
+                                    }
+                                ],
                                 'metadata': {
                                     'file_name': f"{custom_id}_variant_{i+1}",
                                     'instruction_source': instruction_source,
-                                    'variant_number': i + 1
+                                    'variant_number': i + 1,
+                                    'airflow_version': airflow_version
                                 }
                             }
 

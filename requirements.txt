@@ -10,3 +10,4 @@ transformers>=4.35.0
 llama-cpp-python[server]>=0.3.16
 openai>=2.8.0
 datasets>=4.0.0
+huggingface_hub>=0.20.0

@@ -5,8 +5,9 @@ Done
 
 To do
 - fine tuning: 
-- - learn more about Lora QLora and quantisation. Find what best local framework I could use (MLX?)
-- - add some python instructions and reserve some for val/test, use QLora and quantised models (check HP with gemini)
+- - New fine tuning run with A100: drop existing models so that hf recreates them, test 4096 with packing and flash attn 2. Check also if I am using b16
+- - do eval and check that my model quant perform similarly, a common cause is chat template mismatch (see blog above)
+- - beautify: 1. add tokens as secrets to inject in a colab notebook, add README and explanation of how those models have been build
 - mem bound improvements:
 - - on M1: try MLX, quantised KV cache, not spec decoding (I am already almost at mem bandwidht, having 8 small models is bandwidth consuming, it is beneficial only if draft is really good, but we are talking about very small models here...)
 -  deploy GPUs inference: increase workers + vLLM pagedAttention and run a benchmark (TTFT, TPS, cost efficency=) + dedicated GPU quantisazton (AWQ)

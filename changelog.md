@@ -9,3 +9,6 @@
 9. Fine tuning will be on Colab+Unslot since I did some calculation and, even using MLX on M1, it will take approx 20h for 3 epochs with LoRa. Training is compute bound, with the benchmarks we see that M1 can arrive to 1200 t/s in inference, considering training 3x compute effort we can aim for 300-400 t/s. Assuming 1K tokens per instruction per 7K instructions, we need to gent 7M tokens -> 20h
 10. I am adding distilled instructions from Qwen 2.5 coder 32B, suing magpie technique
 11. I will finetune on COlab+unsloth with NVIDIA because
+12. our output distribution is really skweed (from few hundred tokens to thousands) -> this place challenges in both inference (here continous batching should help, maybe also vLLM) and training (still need to understand)
+13. Using a T4 was generating really few t/s (it could have taken 6h to fine tune 3 epochs), I switched to A100 it will take 30m. Packaging=True is very useful for my use case (better than group by length). It is going at 0.2 it/s = 0.2*2048*4=2556 t/s!. I am truncating approx 11% of sequences though with 2048 ctx.
+14. using unsloth to save gguf as well even if it is not efficient. Locally It goes to OOM CPU RAM, since it keeps both og and quant model in RAM. I am ok for now, but can consider an optimisaiton

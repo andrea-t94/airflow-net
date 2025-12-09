@@ -5,7 +5,6 @@ Done
 
 To do
 - fine tuning: 
-- - New fine tuning run with A100: drop existing models so that hf recreates them, test 4096 with packing and flash attn 2. Check also if I am using b16
 - - do eval and check that my model quant perform similarly, a common cause is chat template mismatch (see blog above)
 - - beautify: 1. add tokens as secrets to inject in a colab notebook, add README and explanation of how those models have been build
 - mem bound improvements:
@@ -16,6 +15,9 @@ To do
 
 
 Next steps
+- fine tuning improvements:
+- - scale fine tuning with LoRa, Flash-attn2, bigger context and more data (add new skills) -> I can also use bigger model
+- - evaluate different quant and models
 - LLM as teacher that generate new type of instructions (debugging)
 - generalise api calls to any LLM 
 - add a way to score code complexity (euristic) and analyse performances for different complexity and version

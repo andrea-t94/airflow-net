@@ -16,7 +16,7 @@ To do
 
 Next steps
 - fine tuning improvements:
-- - scale fine tuning with LoRa, Flash-attn2, bigger context and more data (add new skills) -> I can also use bigger model
+- - scale single GPU fine tuning with LoRa, Flash-attn2, bigger context and more data (add new skills) -> I can also use bigger model. ATM it take 30/40 min
 - - evaluate different quant and models
 - LLM as teacher that generate new type of instructions (debugging)
 - generalise api calls to any LLM 

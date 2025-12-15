@@ -5,7 +5,7 @@ Done
 
 To do
 - fine tuning: 
-- - do eval and check that my model quant perform similarly, a common cause is chat template mismatch (see blog above)
+- - improve llm evaluation: model seems over rejecting, understand reasons + many wrong output format
 - - beautify: 1. add tokens as secrets to inject in a colab notebook, add README and explanation of how those models have been build
 - mem bound improvements:
 - - on M1: try MLX, quantised KV cache, not spec decoding (I am already almost at mem bandwidht, having 8 small models is bandwidth consuming, it is beneficial only if draft is really good, but we are talking about very small models here...)

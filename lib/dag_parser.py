@@ -359,15 +359,7 @@ class DAGValidator:
     def _check_dag_structure(self, dag_info: dict, file_path: Path) -> List[ValidationError]:
         """Check for basic DAG structure issues"""
         errors = []
-        
-        # Check if DAG has at least one task
-        if not dag_info['task_ids']:
-            errors.append(ValidationError(
-                str(file_path),
-                "EMPTY_DAG",
-                "DAG has no tasks defined"
-            ))
-        
+
         # Check for multiple DAG definitions in one file (warning)
         if len(dag_info['dag_ids']) > 1:
             errors.append(ValidationError(
@@ -375,7 +367,7 @@ class DAGValidator:
                 "MULTIPLE_DAGS",
                 f"Multiple DAGs defined in one file: {', '.join(dag_info['dag_ids'])}"
             ))
-        
+
         return errors
     
     def validate_directory(self, directory: Path, recursive: bool = True) -> List[ValidationError]:

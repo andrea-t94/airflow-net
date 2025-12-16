@@ -5,7 +5,7 @@ Done
 
 To do
 - fine tuning: 
-- - improve llm evaluation: model seems over rejecting, understand reasons + many wrong output format
+- - improve llm evaluation: to improve I need to visualise how current dag files are evaluated. To do so, I want to have a final dataset with, model type, sys prompt, instruction (airlfow or generic code), original output, model output and evaluation.
 - - beautify: 1. add tokens as secrets to inject in a colab notebook, add README and explanation of how those models have been build
 - mem bound improvements:
 - - on M1: try MLX, quantised KV cache, not spec decoding (I am already almost at mem bandwidht, having 8 small models is bandwidth consuming, it is beneficial only if draft is really good, but we are talking about very small models here...)

@@ -50,7 +50,7 @@ with open(OUTPUT_FILE, "w") as f:
             # Re-format to Qwen ChatML for training
             entry = {
                 "messages": [
-                    {"role": "system", "content": "You are a helpful coding assistant."},
+                    {"role": "system", "content": "You are an expert Python developer. Provide complete, working code solutions for programming tasks. Include brief explanations of key concepts when helpful for understanding."},
                     {"role": "user", "content": conversations[0]['value']},     # Original case
                     {"role": "assistant", "content": conversations[1]['value']}  # Original case
                 ]

@@ -23,6 +23,7 @@ from huggingface_hub import HfApi
 def prepare_combined_dataset(airflow_path: str, magpie_path: str) -> DatasetDict:
     """
     Load and combine both datasets, then split into train/eval/test.
+    Adds source metadata to track dataset origin.
 
     Args:
         airflow_path: Path to airflow_instructions.jsonl
@@ -39,6 +40,12 @@ def prepare_combined_dataset(airflow_path: str, magpie_path: str) -> DatasetDict
 
     magpie_dataset = load_dataset("json", data_files=magpie_path, split="train")
     print(f"✓ Magpie dataset: {len(magpie_dataset)} samples")
+
+    # Add source metadata to each dataset
+    print("\nAdding source metadata...")
+    airflow_dataset = airflow_dataset.add_column("source", ["airflow"] * len(airflow_dataset))
+    magpie_dataset = magpie_dataset.add_column("source", ["magpie"] * len(magpie_dataset))
+    print("✓ Source metadata added")
 
     # Combine datasets
     combined_dataset = concatenate_datasets([airflow_dataset, magpie_dataset])
@@ -74,13 +81,14 @@ def prepare_combined_dataset(airflow_path: str, magpie_path: str) -> DatasetDict
     return split_dataset
 
 
-def upload_to_huggingface(dataset: DatasetDict, repo_name: str, private: bool = False):
+def upload_to_huggingface(dataset: DatasetDict, repo_name: str, readme_content: str, private: bool = False):
     """
-    Upload dataset to Hugging Face Hub.
+    Upload dataset to Hugging Face Hub with README.
 
     Args:
         dataset: DatasetDict to upload
         repo_name: Full repository name (e.g., "username/dataset-name")
+        readme_content: Content for README.md dataset card
         private: Whether to make the dataset private
     """
     print(f"\nUploading to Hugging Face Hub: {repo_name}")
@@ -90,21 +98,38 @@ def upload_to_huggingface(dataset: DatasetDict, repo_name: str, private: bool = 
     dataset.push_to_hub(
         repo_name,
         private=private,
-        commit_message="Initial upload of combined Airflow + Magpie dataset"
+        commit_message="Upload combined Airflow + Magpie dataset with source metadata"
     )
 
-    print(f"\n✓ Successfully uploaded to: https://huggingface.co/datasets/{repo_name}")
+    print(f"✓ Dataset uploaded to: https://huggingface.co/datasets/{repo_name}")
+
+    # Upload README.md as dataset card
+    print("✓ Uploading README.md dataset card...")
+    api = HfApi()
+    api.upload_file(
+        path_or_fileobj=readme_content.encode(),
+        path_in_repo="README.md",
+        repo_id=repo_name,
+        repo_type="dataset",
+        commit_message="Add dataset card with detailed documentation"
+    )
+
+    print(f"✓ Successfully uploaded dataset with README to: https://huggingface.co/datasets/{repo_name}")
 
 
-def create_dataset_card(repo_name: str, dataset: DatasetDict):
+def create_dataset_card(repo_name: str, dataset: DatasetDict, airflow_count: int, magpie_count: int):
     """
-    Create a README.md for the dataset card.
+    Create a README.md for the dataset card with detailed format documentation.
 
     Args:
         repo_name: Full repository name
         dataset: DatasetDict with statistics
+        airflow_count: Number of Airflow examples
+        magpie_count: Number of Magpie examples
     """
     total_samples = len(dataset['train']) + len(dataset['eval']) + len(dataset['test'])
+    airflow_pct = (airflow_count / total_samples) * 100
+    magpie_pct = (magpie_count / total_samples) * 100
 
     card_content = f"""---
 license: apache-2.0
@@ -132,15 +157,21 @@ This dataset combines Airflow-specific DAG generation examples with general Pyth
 
 ### Dataset Composition
 
-1. **Airflow Instructions** (~82%): High-quality DAG generation examples with instruction variants
+The dataset includes two types of examples, identified by the `source` field:
+
+1. **Airflow Instructions** (`source: "airflow"`) - {airflow_count:,} samples ({airflow_pct:.1f}%)
+   - High-quality DAG generation examples with instruction variants
    - Domain-specific Airflow DAG code
    - Multiple instruction formulations per example
    - Covers various Airflow operators and patterns
+   - System prompt: *"You are an expert Apache Airflow developer..."*
 
-2. **Magpie General Python** (~18%): Distilled general Python coding instructions
-   - Sourced from Qwen2.5-Coder-32B using Magpie technique
-   - General Python programming tasks
-   - Enhances model's general coding capabilities
+2. **Magpie General Python** (`source: "magpie"`) - {magpie_count:,} samples ({magpie_pct:.1f}%)
+   - Distilled from Qwen2.5-Coder-32B using Magpie technique
+   - General Python programming tasks (algorithms, data structures, libraries)
+   - Includes concise explanations with working code
+   - System prompt: *"You are an expert Python developer..."*
+   - Prevents catastrophic forgetting of general Python capabilities
 
 ### Dataset Splits
 
@@ -152,51 +183,109 @@ This dataset combines Airflow-specific DAG generation examples with general Pyth
 
 ## Format
 
-The dataset uses **ChatML format** with a `messages` field containing conversation turns:
+The dataset uses **ChatML format** compatible with Qwen2.5-Coder and other modern LLMs.
+
+### Schema
+
+Each example contains:
+- `messages` (list): Conversation in ChatML format with roles: system, user, assistant
+- `source` (string): Dataset origin - either `"airflow"` or `"magpie"`
+- `metadata` (dict, optional): Additional metadata from original datasets
+
+### Example Structure
 
 ```json
 {{
   "messages": [
     {{
       "role": "system",
-      "content": "You are an expert Apache Airflow developer..."
+      "content": "You are an expert Apache Airflow developer. Generate complete, valid, and executable Airflow DAG code based on the given requirements. Respond with Python code that follows Airflow best practices."
     }},
     {{
       "role": "user",
-      "content": "Design a workflow that..."
+      "content": "Create a DAG that runs a bash script every morning at 6am."
     }},
     {{
       "role": "assistant",
-      "content": "```python\\nfrom airflow import DAG..."
+      "content": "from airflow import DAG\\nfrom airflow.operators.bash import BashOperator\\nimport pendulum\\n\\nwith DAG(\\n    dag_id='morning_bash_script',\\n    schedule='0 6 * * *',\\n    start_date=pendulum.datetime(2024, 1, 1, tz='UTC'),\\n    catchup=False,\\n) as dag:\\n    run_script = BashOperator(\\n        task_id='run_morning_script',\\n        bash_command='/path/to/script.sh'\\n    )"
     }}
-  ]
+  ],
+  "source": "airflow",
+  "metadata": {{...}}
 }}
+```
+
+### Using the Dataset
+
+```python
+from datasets import load_dataset
+
+# Load the dataset
+dataset = load_dataset("{repo_name}")
+
+# Filter by source
+airflow_only = dataset["train"].filter(lambda x: x["source"] == "airflow")
+magpie_only = dataset["train"].filter(lambda x: x["source"] == "magpie")
+
+# Apply chat template for training
+def format_for_training(example):
+    text = tokenizer.apply_chat_template(
+        example["messages"],
+        tokenize=False,
+        add_generation_prompt=False
+    )
+    return {{"text": text}}
+
+formatted_dataset = dataset.map(format_for_training)
 ```
 
 ## Intended Use
 
 This dataset is designed for fine-tuning code generation models, particularly:
-- **Qwen2.5-Coder** series models
+- **Qwen2.5-Coder** series models (1.5B, 3B, 7B, etc.)
 - Models supporting ChatML format
-- Airflow DAG generation tasks
-- General Python code generation
+- Specialized Airflow DAG generation while maintaining general Python skills
+- Domain adaptation with knowledge retention
 
 ## Training Recommendations
 
+### Hyperparameters
 - **Model:** Qwen/Qwen2.5-Coder-1.5B-Instruct or larger
-- **Method:** LoRA fine-tuning with Unsloth
-- **Epochs:** 1-3 epochs
-- **Batch Size:** 2-4 (with gradient accumulation)
-- **Learning Rate:** 2e-4
+- **Method:** LoRA/QLoRA fine-tuning (recommended: Unsloth)
+- **Epochs:** 3-5 epochs
+- **Batch Size:** 4-8 (with gradient accumulation to effective batch size of 32)
+- **Learning Rate:** 1e-4 to 2e-4
+- **LoRA rank:** 16-32
+- **Max Sequence Length:** 4096 tokens
+
+### System Prompts for Inference
+
+For **Airflow DAG generation**:
+```
+You are an expert Apache Airflow developer. Generate complete, valid, and executable Airflow DAG code based on the given requirements. Respond with Python code that follows Airflow best practices.
+```
+
+For **general Python tasks**:
+```
+You are an expert Python developer. Provide complete, working code solutions for programming tasks. Include brief explanations of key concepts when helpful.
+```
+
+## Dataset Statistics
+
+- **Total conversations:** {total_samples:,}
+- **Airflow examples:** {airflow_count:,} ({airflow_pct:.1f}%)
+- **Magpie examples:** {magpie_count:,} ({magpie_pct:.1f}%)
+- **Format:** ChatML with system/user/assistant roles
+- **Average tokens per example:** ~500-1000 (varies by source)
 
 ## Citation
 
 If you use this dataset, please cite:
 
-```
+```bibtex
 @misc{{airflow-dag-dataset,
   title={{Airflow DAG Generation Dataset}},
-  author={{Your Name}},
+  author={{Andrea Tamburri}},
   year={{2024}},
   publisher={{Hugging Face}},
   url={{https://huggingface.co/datasets/{repo_name}}}
@@ -262,18 +351,26 @@ def main():
     # Prepare dataset
     dataset = prepare_combined_dataset(args.airflow_path, args.magpie_path)
 
-    # Upload to Hugging Face
-    upload_to_huggingface(dataset, repo_name, args.private)
+    # Count sources for statistics
+    airflow_count = sum(1 for x in dataset['train'] if x['source'] == 'airflow') + \
+                    sum(1 for x in dataset['eval'] if x['source'] == 'airflow') + \
+                    sum(1 for x in dataset['test'] if x['source'] == 'airflow')
 
-    # Create and upload dataset card
+    magpie_count = sum(1 for x in dataset['train'] if x['source'] == 'magpie') + \
+                   sum(1 for x in dataset['eval'] if x['source'] == 'magpie') + \
+                   sum(1 for x in dataset['test'] if x['source'] == 'magpie')
+
+    # Create dataset card
     print("\nCreating dataset card...")
-    card = create_dataset_card(repo_name, dataset)
+    card = create_dataset_card(repo_name, dataset, airflow_count, magpie_count)
 
-    # Write card locally first
+    # Write card locally first for review
     with open("dataset_card.md", "w") as f:
         f.write(card)
     print("✓ Dataset card saved to dataset_card.md")
-    print("  You can review and upload it to the dataset repo manually if needed")
+
+    # Upload to Hugging Face with README
+    upload_to_huggingface(dataset, repo_name, card, args.private)
 
     print("\n" + "=" * 60)
     print("✅ COMPLETE!")

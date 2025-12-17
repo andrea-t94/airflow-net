@@ -15,3 +15,4 @@
 15. basic fine tuning using standard unsloth advices, except bigger ctx to trin on the whole dataset and a bigger than usual quantisation since I am dealing with quant sml for code
 16. from the dry run I can see that our fine tuned model is way better bc 1. it knows latest advacement and knows most of the operators (the base use ancient sintax and hallucinates), but sometimes doesn't understand what has been asked and inject internal methods (like tests). Moreover it misses the setup part which the base model has, which I like. Moreover it expose some apis, they should not exist, but bettert to put sth like YOUR API
 17. great results from evaluation! the model is able to generate 8% less invalid DAGs and in general they are better quality as well, but I need to deep dive on how to evaluate. I need to improve it
+18. syntax error rate in line with dataset I've fed the model with, so I am happy. I think qwen standard is safer and just provide something safe

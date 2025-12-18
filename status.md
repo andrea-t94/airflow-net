@@ -4,17 +4,16 @@ Done
 
 
 To do
-- improve llm evaluation: 
-- - run evaluation vs reference output to see how output performs
-- - beautify: 1. add tokens as secrets to inject in a colab notebook, add README and explanation of how those models have been build
+- separate the different components I want to blog and the ones I want to distribute
+
+
+Next steps
 - mem bound improvements:
 - - on M1: try MLX, quantised KV cache, not spec decoding (I am already almost at mem bandwidht, having 8 small models is bandwidth consuming, it is beneficial only if draft is really good, but we are talking about very small models here...)
 -  deploy GPUs inference: increase workers + vLLM pagedAttention and run a benchmark (TTFT, TPS, cost efficency=) + dedicated GPU quantisazton (AWQ)
 - inference repo beautify. Has to be runnable stand alone and I want to write a blog with that (how do I calculate CTX, batch, input output?)
 - quantisation, distillation, pruning?
 
-
-Next steps
 - fine tuning improvements:
 - - scale single GPU fine tuning with LoRa, Flash-attn2, bigger context and more data (add new skills) -> I can also use bigger model. ATM it take 30/40 min
 - - evaluate different quant and models
@@ -22,6 +21,16 @@ Next steps
 - generalise api calls to any LLM 
 - add a way to score code complexity (euristic) and analyse performances for different complexity and version
 - inject known failures (based on my experience and on mosto common I find in source code) into current correct DAGs implementations dataset for creating a troubleshooting dataset for finetuning
+
+data imrpovements:
+- more data on Dags and generic code
+- better quality and preprocessing
+- excllude internal libraries
+- add more airflow versions
+
+model improvements:
+- e.g. performance with different code compelxity -> might need better model
+- add better dag file parser that can become a tool
 
 
 Dag miner overview

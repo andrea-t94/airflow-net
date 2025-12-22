@@ -14,7 +14,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any
 import logging
-from dag_parser import DAGValidator
+# ...
+try:
+    from airflow_net.validation import DAGValidator
+except ImportError:
+    # Fallback/Dev mode: try to find it in src if not installed
+    from pathlib import Path
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'src')) # Adjust path to src
+    from airflow_net.validation import DAGValidator
 
 logger = logging.getLogger(__name__)
 

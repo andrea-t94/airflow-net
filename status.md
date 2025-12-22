@@ -4,7 +4,7 @@ Done
 
 
 To do
-- separate the different components I want to blog and the ones I want to distribute
+- optimise research/data: 1. simplify each and every component, 2. check if we are using src module for validation, 3. add instermediate artifacts to repo
 
 
 Next steps

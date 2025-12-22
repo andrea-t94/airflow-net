@@ -9,7 +9,7 @@ from pathlib import Path
 # Add lib to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
 
-from instruction_generator import ClaudeBatchInstructionGenerator
+from instruction import ClaudeBatchInstructionGenerator
 from config_loader import load_generation_config, get_api_key, get_input_dataset_path
 
 # Set up logging

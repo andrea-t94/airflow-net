@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "airflow-net"
+version = "0.1.0"
+description = "Reasoning agent for generating and validating Airflow DAGs"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "llama-cpp-python[server]>=0.3.16",
+    "pydantic>=2.0.0",
+    "click>=8.0.0",
+    "mcp>=0.1.0",
+    "openai>=1.0.0"
+]
+
+[project.scripts]
+airflow-net = "airflow_net.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/airflow_net"]

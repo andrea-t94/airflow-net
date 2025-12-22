@@ -5,10 +5,10 @@ import logging
 import argparse
 from pathlib import Path
 
-# Add lib to path
+# Add lib to path (pointing to research/data/lib)
 sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
 
-from dag_miner import SimpleAirflowDAGMiner
+from mining import SimpleAirflowDAGMiner
 from config_loader import load_mining_config
 
 # Set up logging

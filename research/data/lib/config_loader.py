@@ -1,27 +1,45 @@
 """
-Configuration loader for AirflowNet project
+Configuration loader for AirflowNet Research
 """
 
 import yaml
 from pathlib import Path
 from typing import Dict, Any
 import os
+import sys
 
 # Load .env file if it exists
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    # dotenv not available, fall back to manual parsing
     pass
 
 
 def load_config(config_file: str) -> Dict[str, Any]:
     """Load configuration from YAML file."""
-    config_path = Path("config") / config_file
+    # Search paths relative to this file (research/data/lib/config_loader.py)
+    # We want to find research/data/config/
+    
+    # Base is research/data
+    base_dir = Path(__file__).parent.parent
+    
+    search_paths = [
+        base_dir / "config",
+        Path("research/data/config"), # From root
+        Path("config"), # Legacy check from root
+    ]
 
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
+    config_path = None
+    for folder in search_paths:
+        potential_path = folder / config_file
+        if potential_path.exists():
+            config_path = potential_path
+            break
+            
+    if not config_path:
+        # Fallback for running from different CWD
+        raise FileNotFoundError(f"Config file {config_file} not found in search paths: {[str(p) for p in search_paths]}")
 
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -51,12 +69,10 @@ def get_github_token() -> str:
 
 def _get_env_variable(var_name: str, required: bool = True) -> str:
     """Get environment variable from environment or .env file."""
-    # Check environment first (dotenv should have loaded it)
     value = os.environ.get(var_name)
     if value:
         return value
 
-    # Try .env file as fallback (in case dotenv wasn't available)
     env_path = Path('.env')
     if env_path.exists():
         with open(env_path, 'r') as f:
@@ -72,6 +88,11 @@ def _get_env_variable(var_name: str, required: bool = True) -> str:
 def get_input_dataset_path(config: Dict[str, Any] = None) -> str:
     """Always use dags.jsonl as input dataset."""
     dataset_path = Path("datasets/raw/dags.jsonl")
+    if not dataset_path.exists():
+        # check relative to research root if needed, but datasets usually at root
+        if Path("../../datasets/raw/dags.jsonl").exists():
+             dataset_path = Path("../../datasets/raw/dags.jsonl")
+             
     if not dataset_path.exists():
         raise FileNotFoundError(f"Input dataset file not found: {dataset_path}")
     return str(dataset_path)

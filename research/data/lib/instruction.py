@@ -8,80 +8,59 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import anthropic
 import logging
+
+from research.lib.batch_processor import ClaudeBatchProcessor
 
 logger = logging.getLogger(__name__)
 
 
 def ensure_output_dir() -> Path:
-    output_dir = Path("datasets") / "processed"
+    output_dir = Path("research/artifacts/02_instruct_dags")
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
 
-class ClaudeBatchInstructionGenerator:
-    """Batch processing using Claude's Message Batches API via SDK."""
+class ClaudeBatchInstructionGenerator(ClaudeBatchProcessor):
+    """Batch processing for Instruction Generation."""
 
     def __init__(self, api_key: str, config: Dict[str, Any] = None):
-        self.client = anthropic.Anthropic(api_key=api_key)
         self.config = config or {}
+        poll_interval = self.config.get('api', {}).get('poll_interval', 30)
+        super().__init__(api_key, poll_interval)
+        self.model_config = self.config.get('model', {})
 
-        # Set config values or defaults
-        if config and 'api' in config:
-            self.poll_interval = config['api'].get('poll_interval', 30)
-        else:
-            self.poll_interval = 30
+    def _create_analysis_prompt(self, dag_record: Dict) -> str:
+        """Create prompt for Claude."""
+        prompt_template = self.config.get('prompt_template')
+        if not prompt_template:
+            raise ValueError("Prompt template must be provided in configuration")
 
-    def _generate_custom_id(self, counter: int) -> str:
-        """Generate a simple custom ID for batch requests."""
-        return f'dag_{counter}'
-
-    def _create_analysis_prompt(self, dag_record: Dict, prompt_template: str = None) -> str:
-        """Create simplified prompt for Claude to generate one instruction."""
         content = dag_record['content']
         metadata = dag_record['metadata']
 
-        # Truncate content if too long
+        # Truncate content if too long (simple safety check)
         if len(content) > 4000:
             content = content[:4000] + "\n# ... (code truncated)"
 
-        if prompt_template:
-            return prompt_template.format(
-                content=content,
-                airflow_version=metadata.get('airflow_version', 'unknown')
-            )
+        return prompt_template.format(
+            content=content,
+            airflow_version=metadata.get('airflow_version', 'unknown')
+        )
 
-        # Default prompt
-        prompt = f"""Analyze this Airflow DAG and create a clear learning instruction.
-
-        DAG CODE:
-        ```python
-        {content}
-        ```
-
-        Airflow Version: {metadata.get('airflow_version', 'unknown')}
-
-        Respond with only a JSON object:
-        {{
-        "instruction": "Clear, educational instruction explaining what to build (2-3 sentences max)"
-        }}
-
-        The instruction should be actionable and explain WHAT to build, not HOW to build it."""
-
-        return prompt
-
-    def prepare_batch_requests(self, input_file: str, max_dags: int = None,
-                             prompt_template: str = None) -> List[Dict]:
+    def prepare_batch_requests(self, input_file: str, max_dags: Optional[int] = None) -> List[Dict]:
         """Prepare batch requests from DAG records."""
         logger.info(f"📖 Loading DAG records from {input_file}...")
 
-        # Get model configuration
-        model_config = self.config.get('model', {})
-        model = model_config.get('name', 'claude-3-5-haiku-20241022')
-        temperature = model_config.get('temperature', 0.2)
-        max_tokens = model_config.get('max_tokens', 600)
+        # Rely strictly on config, no silent defaults
+        model = self.model_config.get('name')
+        if not model:
+            raise ValueError("Model name must be provided in configuration")
+            
+        temperature = self.model_config.get('temperature', 0.2)
+        max_tokens = self.model_config.get('max_tokens', 600)
 
         batch_requests = []
         processed_count = 0
@@ -93,25 +72,21 @@ class ClaudeBatchInstructionGenerator:
 
                 try:
                     dag_record = json.loads(line.strip())
-
-                    # Skip invalid syntax
-                    if not dag_record['metadata'].get('syntax_valid', True):
+                    if not dag_record.get('metadata', {}).get('syntax_valid', True):
                         continue
 
-                    prompt = self._create_analysis_prompt(dag_record, prompt_template)
+                    prompt = self._create_analysis_prompt(dag_record)
+                    custom_id = f"dag_{processed_count}"
 
-                    # Create batch request
-                    request = {
-                        "custom_id": self._generate_custom_id(processed_count),
+                    batch_requests.append({
+                        "custom_id": custom_id,
                         "params": {
                             "model": model,
                             "max_tokens": max_tokens,
                             "temperature": temperature,
                             "messages": [{"role": "user", "content": prompt}]
                         }
-                    }
-
-                    batch_requests.append(request)
+                    })
                     processed_count += 1
 
                 except json.JSONDecodeError:
@@ -120,273 +95,118 @@ class ClaudeBatchInstructionGenerator:
         logger.info(f"📦 Prepared {len(batch_requests)} batch requests")
         return batch_requests
 
-    def submit_batch(self, requests: List[Dict]) -> str:
-        """Submit batch to Claude API using SDK."""
-        logger.info(f"🚀 Submitting batch with {len(requests)} requests...")
+    def _format_as_chatml(self, dag_record: Dict, instruction_text: str, source: str, variant: int) -> Dict:
+        """Format a single instruction-DAG pair as ChatML."""
+        return {
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': 'You are an expert Apache Airflow developer. Generate complete, valid Airflow DAGs based on given requirements.'
+                },
+                {
+                    'role': 'user',
+                    'content': f"{instruction_text}\n\nAirflow Version: {dag_record['metadata'].get('airflow_version', 'unknown')}"
+                },
+                {
+                    'role': 'assistant',
+                    'content': dag_record['content']
+                }
+            ],
+            'metadata': {
+                'file_name': f"generated_variant_{variant}",
+                'instruction_source': source,
+                'variant_number': variant,
+                'airflow_version': dag_record['metadata'].get('airflow_version')
+            }
+        }
 
-        try:
-            message_batch = self.client.beta.messages.batches.create(
-                requests=requests
-            )
+    def process_batch_results(self, results: List[Dict], input_file: str, output_file: str) -> Dict:
+        """Process batch results, match with original DAGs, and save."""
+        logger.info("🔄 Processing results...")
+        
+        instruction_source = self.config.get('generation', {}).get('instruction_source', 'claude-3.5')
 
-            batch_id = message_batch.id
-            logger.info(f"✅ Batch submitted successfully: {batch_id}")
-            return batch_id
-
-        except Exception as e:
-            raise Exception(f"Failed to submit batch: {e}")
-
-    def wait_for_batch_completion(self, batch_id: str, poll_interval: int = None) -> object:
-        """Poll batch status until completion using SDK."""
-        if poll_interval is None:
-            poll_interval = self.poll_interval
-        logger.info(f"⏳ Waiting for batch completion (polling every {poll_interval}s)...")
-
-        start_time = time.time()
-        last_status = None
-
-        while True:
-            try:
-                message_batch = self.client.beta.messages.batches.retrieve(batch_id)
-                status = message_batch.processing_status
-
-                # Log status changes
-                if status != last_status:
-                    elapsed = time.time() - start_time
-                    logger.info(f"📊 Batch status: {status} (elapsed: {elapsed:.1f}s)")
-
-                    if getattr(message_batch, 'request_counts', None):
-                        counts = message_batch.request_counts
-                        total = getattr(counts, 'total', 0)
-                        completed = (
-                            getattr(counts, 'succeeded', 0) +
-                            getattr(counts, 'errored', 0) +
-                            getattr(counts, 'canceled', 0)
-                        )
-                        if total > 0:
-                            progress = (completed / total) * 100
-                            logger.info(f"📈 Progress: {completed}/{total} ({progress:.1f}%) completed")
-
-                    last_status = status
-
-                if status in ["ended", "failed", "canceled", "expired"]:
-                    logger.info(f"🏁 Batch completed with status: {status}")
-                    return message_batch
-
-                time.sleep(poll_interval)
-
-            except Exception as e:
-                raise Exception(f"Failed to get batch status: {e}")
-
-    def download_batch_results(self, batch_id: str) -> List[Dict]:
-        """Download and parse batch results using SDK."""
-        logger.info(f"⬇️ Downloading batch results...")
-
-        try:
-            # Get batch results using SDK
-            results_generator = self.client.beta.messages.batches.results(batch_id)
-
-            # Convert generator to list
-            results = []
-            for result in results_generator:
-
-                # Convert SDK result to simple dict
-                result_dict = {"custom_id": result.custom_id, "result": {}}
-
-                if result.result:
-                    result_dict["result"]["type"] = getattr(result.result, 'type', None)
-
-                    if getattr(result.result, 'message', None):
-                        content = getattr(result.result.message, 'content', [])
-                        text = content[0].text if content else ""
-                        result_dict["result"]["message"] = {"content": [{"text": text}]}
-
-                    if getattr(result.result, 'error', None):
-                        result_dict["result"]["error"] = {"type": getattr(result.result.error, 'type', "unknown")}
-
-                results.append(result_dict)
-
-            logger.info(f"📥 Downloaded {len(results)} results")
-            return results
-
-        except Exception as e:
-            raise Exception(f"Failed to download results: {e}")
-
-    def process_batch_results(self, results: List[Dict], input_file: str, output_file: str,
-                            instruction_source: str = "claude-3.5") -> Dict:
-        """Process batch results and generate final output."""
-        logger.info(f"🔄 Processing batch results...")
-
-        # Load original DAG records and recreate custom_id mapping
-        dag_records = {}
-        processed_count = 0
+        # 1. Load original DAGs to map custom_id -> DAG content
+        dag_map = {}
+        idx = 0
         with open(input_file, 'r', encoding='utf-8') as f:
             for line in f:
                 try:
-                    dag_record = json.loads(line.strip())
-
-                    # Skip invalid syntax (same logic as prepare_batch_requests)
-                    if not dag_record['metadata'].get('syntax_valid', True):
-                        continue
-
-                    # Recreate the same custom_id logic
-                    clean_id = self._generate_custom_id(processed_count)
-
-                    # Store with the same custom_id we used for the batch
-                    dag_records[clean_id] = dag_record
-                    processed_count += 1
-
+                    d = json.loads(line)
+                    if d.get('metadata', {}).get('syntax_valid', True):
+                        dag_map[f"dag_{idx}"] = d
+                        idx += 1
                 except json.JSONDecodeError:
                     continue
 
         instructions = []
-        stats = {
-            'total_processed': 0,
-            'successful_requests': 0,  # Requests that generated at least 1 instruction
-            'failed_requests': 0,      # Requests that generated 0 instructions
-            'total_instructions_generated': 0,  # Total instruction records created
-            'expected_instructions_per_request': 3,
-            'api_calls': len(results)
-        }
+        stats = {'total': 0, 'success': 0, 'failed': 0, 'generated': 0}
 
-        for result in results:
-            stats['total_processed'] += 1
-            custom_id = result.get("custom_id", "unknown")
-
-            # Check if result is successful (SDK uses "succeeded" instead of "message")
-            result_type = result.get("result", {}).get("type")
-            if result_type == "succeeded" or result_type == "message":
-                # Success case
+        for res in results:
+            stats['total'] += 1
+            cid = res.get("custom_id")
+            
+            # Check success
+            if res.get("result", {}).get("type") == "succeeded":
                 try:
-                    message_content = result["result"]["message"]["content"][0]["text"]
-
-                    # Clean up JSON formatting
-                    if message_content.startswith('```json'):
-                        message_content = message_content.replace('```json', '').replace('```', '').strip()
-
-                    # Parse multiple JSON objects (one per line)
-                    instruction_lines = [line.strip() for line in message_content.split('\n') if line.strip()]
-                    parsed_instructions = []
-
-                    for line in instruction_lines:
+                    text = res["result"]["message"]["content"][0]["text"]
+                    # Clean markdown code blocks
+                    text = text.replace('```json', '').replace('```', '').strip()
+                    
+                    # Parse lines
+                    parsed_objs = []
+                    for line in text.split('\n'):
+                        if not line.strip(): continue
                         try:
-                            instruction_obj = json.loads(line)
-                            if "instruction" in instruction_obj:
-                                parsed_instructions.append(instruction_obj)
-                        except json.JSONDecodeError:
-                            # Skip invalid JSON lines
-                            continue
+                            obj = json.loads(line)
+                            if "instruction" in obj: parsed_objs.append(obj)
+                        except: continue
 
-                    # Create separate records for each instruction
-                    if parsed_instructions and custom_id in dag_records:
-                        dag_record = dag_records[custom_id]
-
-                        for i, analysis in enumerate(parsed_instructions):
-                            # Convert to ChatML format for Qwen Coder 2.5 training
-                            airflow_version = dag_record['metadata']['airflow_version']
-                            instruction_text = analysis['instruction']
-
-                            instruction_record = {
-                                'messages': [
-                                    {
-                                        'role': 'system',
-                                        'content': 'You are an expert Apache Airflow developer. Generate complete, valid Airflow DAGs based on given requirements.'
-                                    },
-                                    {
-                                        'role': 'user',
-                                        'content': f"{instruction_text}\n\nAirflow Version: {airflow_version}"
-                                    },
-                                    {
-                                        'role': 'assistant',
-                                        'content': dag_record['content']
-                                    }
-                                ],
-                                'metadata': {
-                                    'file_name': f"{custom_id}_variant_{i+1}",
-                                    'instruction_source': instruction_source,
-                                    'variant_number': i + 1,
-                                    'airflow_version': airflow_version
-                                }
-                            }
-
-                            instructions.append(instruction_record)
-
-                        # Count this as a successful request since we got at least 1 instruction
-                        stats['successful_requests'] += 1
-                        stats['total_instructions_generated'] += len(parsed_instructions)
+                    if parsed_objs and cid in dag_map:
+                        dag = dag_map[cid]
+                        for i, p_obj in enumerate(parsed_objs):
+                            instructions.append(
+                                self._format_as_chatml(dag, p_obj['instruction'], instruction_source, i+1)
+                            )
+                        stats['success'] += 1
+                        stats['generated'] += len(parsed_objs)
                     else:
-                        stats['failed_requests'] += 1
-
-                except (json.JSONDecodeError, Exception):
-                    stats['failed_requests'] += 1
-
+                        stats['failed'] += 1
+                except Exception:
+                    stats['failed'] += 1
             else:
-                # Error case
-                stats['failed_requests'] += 1
+                stats['failed'] += 1
 
-        # Save instructions
-        logger.info(f"💾 Saving {len(instructions)} instructions to {output_file}...")
+        # Save
+        logger.info(f"💾 Saving {len(instructions)} instructions to {output_file}")
         with open(output_file, 'w', encoding='utf-8') as f:
-            for instruction in instructions:
-                json.dump(instruction, f, ensure_ascii=False)
-                f.write('\n')
-
+            for curr in instructions:
+                f.write(json.dumps(curr, ensure_ascii=False) + '\n')
+        
         # Save stats
-        stats_file = output_file.replace('.jsonl', '_stats.json')
-        with open(stats_file, 'w', encoding='utf-8') as f:
+        stats_path = Path(output_file).parent / (Path(output_file).stem + "_stats.json")
+        with open(stats_path, 'w') as f:
             json.dump(stats, f, indent=2)
 
-        logger.info(f"📊 Statistics saved to {stats_file}")
         return stats
 
-    def process_dataset_batch(self, input_file: str, output_file: str, max_dags: int = None,
-                            prompt_template: str = None, instruction_source: str = "claude-3.5",
-                            is_test: bool = False) -> Dict:
-        """Complete batch processing workflow."""
-        start_time = time.time()
-
-        # Ensure output directory exists
-        output_dir = ensure_output_dir()
-
-        # Use consistent filename (add test prefix if test mode)
+    def process_dataset_batch(self, input_file: str, max_dags: int = None, is_test: bool = False) -> Dict:
+        """Main workflow method."""
+        # Setup paths
+        output_filename = self.config.get('generation', {}).get('output_file', 'instructions.jsonl')
         if is_test:
-            final_output_file = output_dir / f"test_{output_file}"
-        else:
-            final_output_file = output_dir / output_file
-
-        # Step 1: Prepare batch requests
-        batch_requests = self.prepare_batch_requests(
-            input_file, max_dags, prompt_template
-        )
-
-        if not batch_requests:
-            logger.error("❌ No valid DAG records found")
+            output_filename = "test_" + output_filename
+            
+        out_path = ensure_output_dir() / output_filename
+        
+        # Run workflow
+        reqs = self.prepare_batch_requests(input_file, max_dags)
+        if not reqs:
+            logger.error("No valid requests prepared.")
             return {}
 
-        # Step 2: Submit batch
-        batch_id = self.submit_batch(batch_requests)
-
-        # Step 3: Wait for completion
+        batch_id = self.submit_batch(reqs)
         self.wait_for_batch_completion(batch_id)
-
-        # Step 4: Download results
         results = self.download_batch_results(batch_id)
-
-        # Step 5: Process and save results
-        stats = self.process_batch_results(results, input_file, str(final_output_file), instruction_source)
-
-        # Add timing and generation metadata
-        total_time = time.time() - start_time
-        model_config = self.config.get('model', {})
-        stats['total_time'] = total_time
-        stats['batch_id'] = batch_id
-        stats['generation_metadata'] = {
-            'generation_timestamp': datetime.now().isoformat(),
-            'is_test_run': is_test,
-            'input_file': input_file,
-            'output_file': str(final_output_file),
-            'model': model_config.get('name', 'claude-3-5-haiku-20241022'),
-            'instruction_source': instruction_source
-        }
-
-        return stats
+        
+        return self.process_batch_results(results, input_file, str(out_path))

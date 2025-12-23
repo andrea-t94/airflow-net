@@ -1,0 +1,24 @@
+{
+  "total_dags": 2516,
+  "syntax_valid_count": 2246,
+  "multifile_count": 149,
+  "versions": {
+    "2.7.2": 361,
+    "2.8.4": 377,
+    "2.9.3": 400,
+    "3.0.0": 458,
+    "3.0.1": 460,
+    "3.0.6": 460
+  },
+  "length_distribution": {
+    "short": 542,
+    "medium": 1294,
+    "long": 680
+  },
+  "missing_versions": [],
+  "mining_metadata": {
+    "mining_timestamp": "2025-11-19T17:23:52.812346",
+    "is_test_run": false,
+    "total_dags": 2516
+  }
+}

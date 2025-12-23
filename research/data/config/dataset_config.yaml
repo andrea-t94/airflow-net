@@ -1,0 +1,29 @@
+# Dataset Creation & Upload Configuration
+
+# Hugging Face Settings
+hf:
+  username: "${HF_USERNAME}"  # Will be overridden by CLI arg or env var if needed, but script expects arg
+  dataset_name: "airflow-dag-dataset"
+  private: false
+
+# Paths (relative to project root usually, but script will handle resolution)
+paths:
+  airflow_raw: "research/artifacts/02_instruct_dags/airflow_instructions.jsonl"
+  magpie_output: "research/artifacts/magpie_data/general_python_replay_buffer.jsonl"
+  output_dir: "research/artifacts/magpie_data"
+
+# Magpie Settings
+magpie:
+  source_dataset: "Magpie-Align/Magpie-Qwen2.5-Coder-Pro-300K-v0.1"
+  buffer_size: 1500
+  streaming: true
+  filters:
+    allowed_keywords: ["python", "sql", "bash", "shell", "script", "pip", "dataframe"]
+    blocked_keywords: ["java ", "c++", "cpp", "rust", "golang", "react", "html", "css", "node", "typescript"]
+    min_conversations: 2
+
+# Dataset Split
+splits:
+  test_size: 0.1 # 10% for test+eval
+  eval_ratio: 0.5 # 50% of test_size for eval (so 5% total)
+  seed: 42

@@ -13,10 +13,10 @@ generation:
   output_file: "airflow_instructions.jsonl"
   instruction_source: "claude-3.5"
 
-# Note: Input is always datasets/raw/dags.jsonl
+# Note: Input is always research/artifacts/01_raw_dags/dags.jsonl
 # Output files:
-#   Full run: datasets/processed/airflow_instructions.jsonl
-#   Test run: datasets/processed/test_airflow_instructions.jsonl
+#   Full run: research/artifacts/02_instruct_dags/airflow_instructions.jsonl
+#   Test run: research/artifacts/02_instruct_dags/test_airflow_instructions.jsonl
 
 # Prompt template
 prompt_template: |

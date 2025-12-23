@@ -57,6 +57,11 @@ def load_generation_config() -> Dict[str, Any]:
     return load_config("generation_config.yaml")
 
 
+def load_dataset_config() -> Dict[str, Any]:
+    """Load dataset creation configuration."""
+    return load_config("dataset_config.yaml")
+
+
 def get_api_key() -> str:
     """Get Anthropic API key from environment or .env file."""
     return _get_env_variable('ANTHROPIC_API_KEY', required=True)
@@ -87,11 +92,11 @@ def _get_env_variable(var_name: str, required: bool = True) -> str:
 
 def get_input_dataset_path(config: Dict[str, Any] = None) -> str:
     """Always use dags.jsonl as input dataset."""
-    dataset_path = Path("datasets/raw/dags.jsonl")
+    dataset_path = Path("research/artifacts/01_raw_dags/dags.jsonl")
     if not dataset_path.exists():
-        # check relative to research root if needed, but datasets usually at root
-        if Path("../../datasets/raw/dags.jsonl").exists():
-             dataset_path = Path("../../datasets/raw/dags.jsonl")
+        # check relative usage
+        if Path("../../research/artifacts/01_raw_dags/dags.jsonl").exists():
+             dataset_path = Path("../../research/artifacts/01_raw_dags/dags.jsonl")
              
     if not dataset_path.exists():
         raise FileNotFoundError(f"Input dataset file not found: {dataset_path}")

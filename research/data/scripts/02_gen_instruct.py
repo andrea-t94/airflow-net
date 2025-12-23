@@ -1,96 +1,79 @@
 #!/usr/bin/env python3
+"""
+Script to generate instruction datasets using Claude Batch API.
+Run as module: python -m research.data.scripts.02_gen_instruct
+"""
 
-import sys
 import logging
 import time
 import argparse
 from pathlib import Path
 
-# Add lib to path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
-
-from instruction import ClaudeBatchInstructionGenerator
-from config_loader import load_generation_config, get_api_key, get_input_dataset_path
+# Assumes research.data.lib is in python path
+from research.data.lib.instruction import ClaudeBatchInstructionGenerator
+from research.data.lib.config_loader import load_generation_config, get_api_key, get_input_dataset_path
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger("gen_instruct")
 
 def main():
-    """Run instruction generation using configuration."""
     parser = argparse.ArgumentParser(description="Airflow Instruction Generator")
-    parser.add_argument('--maxdags', type=int, help='Number of DAGs to process (overrides config)')
-    parser.add_argument('--input', help='Input dataset file (overrides auto-detection)')
-    parser.add_argument('--test', action='store_true', help='Run in test mode (5 DAGs, test output)')
-
+    parser.add_argument('--maxdags', type=int, help='Override number of DAGs to process')
+    parser.add_argument('--input', help='Override input dataset file')
+    parser.add_argument('--test', action='store_true', help='Run in test mode (5 DAGs)')
     args = parser.parse_args()
 
     try:
-        # Load configuration
         config = load_generation_config()
-
-        # Get API key
         api_key = get_api_key()
 
-        # Handle test mode
+        # Determine input and limits
+        input_file = args.input if args.input else get_input_dataset_path(config)
+        
         if args.test:
-            # Test mode: use main dataset but limit to 5 DAGs
-            input_file = get_input_dataset_path(config)
             max_dags = 5
-            print("🧪 Starting Test Instruction Generation")
+            logger.info("🧪 Running in TEST mode (max 5 DAGs)")
         else:
-            # Normal mode
-            if args.input:
-                input_file = args.input
-            else:
-                input_file = get_input_dataset_path(config)
             max_dags = args.maxdags if args.maxdags else config['generation']['max_dags']
-            print("🚀 Starting Full Instruction Generation")
+            logger.info("🚀 Running in FULL mode")
 
         if not Path(input_file).exists():
-            logger.error(f"❌ Input file not found: {input_file}")
+            logger.error(f"Input file not found: {input_file}")
             return 1
-        print(f"📁 Input: {input_file}")
-        print(f"📄 Output: {config['generation']['output_file']}")
-        print(f"🤖 Model: {config['model']['name']}")
-        if max_dags:
-            print(f"📝 Max DAGs: {max_dags}")
-        else:
-            print(f"📝 Processing ALL DAGs in file")
-        print()
 
-        # Initialize generator
+        logger.info(f"Input: {input_file}")
+        logger.info(f"Output Config: {config['generation']['output_file']}")
+        logger.info(f"Model: {config['model']['name']}")
+        logger.info(f"Max DAGs: {max_dags if max_dags else 'ALL'}")
+
+        # Initialize and run
         generator = ClaudeBatchInstructionGenerator(api_key, config)
-
+        
         start_time = time.time()
-
-        # Run batch processing
         stats = generator.process_dataset_batch(
             input_file=input_file,
-            output_file=config['generation']['output_file'],
             max_dags=max_dags,
-            prompt_template=config.get('prompt_template'),
-            instruction_source=config['generation']['instruction_source'],
             is_test=args.test
         )
-
-        elapsed_time = time.time() - start_time
+        elapsed = time.time() - start_time
 
         if stats:
-            print(f"\n✅ Generation completed successfully!")
-            print(f"📊 Statistics:")
-            for key, value in stats.items():
-                if key != 'generation_metadata':  # Skip the nested metadata
-                    print(f"   {key}: {value}")
-            print(f"⏱️  Total time: {elapsed_time:.1f} seconds")
-
-        return 0
-
+            logger.info("✅ Generation completed successfully")
+            for k, v in stats.items():
+                if k != 'generation_metadata':
+                    logger.info(f"   {k}: {v}")
+            logger.info(f"⏱️ Total time: {elapsed:.1f}s")
+            return 0
+            
     except Exception as e:
-        logger.error(f"❌ Generation failed: {e}")
+        logger.exception("Generation failed")
         return 1
 
-
 if __name__ == "__main__":
-    exit(main())
+    import sys
+    sys.exit(main())

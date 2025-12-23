@@ -1,0 +1,8 @@
+{
+  "total_processed": 2246,
+  "successful_requests": 2246,
+  "failed_requests": 0,
+  "total_instructions_generated": 6738,
+  "expected_instructions_per_request": 3,
+  "api_calls": 2246
+}

@@ -86,6 +86,7 @@ Each example contains:
 
 ```python
 from datasets import load_dataset
+from transformers import AutoTokenizer
 
 # Load the dataset
 dataset = load_dataset("{repo_name}")
@@ -93,6 +94,9 @@ dataset = load_dataset("{repo_name}")
 # Filter by source
 airflow_only = dataset["train"].filter(lambda x: x["source"] == "airflow")
 magpie_only = dataset["train"].filter(lambda x: x["source"] == "magpie")
+
+# Initialize tokenizer (example)
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Coder-1.5B-Instruct")
 
 # Apply chat template for training
 def format_for_training(example):
@@ -106,36 +110,41 @@ def format_for_training(example):
 formatted_dataset = dataset.map(format_for_training)
 ```
 
-## Intended Use
+### Data Fields
 
-This dataset is designed for fine-tuning code generation models, particularly:
-- **Qwen2.5-Coder** series models (1.5B, 3B, 7B, etc.)
-- Models supporting ChatML format
-- Specialized Airflow DAG generation while maintaining general Python skills
-- Domain adaptation with knowledge retention
+*   **messages**: A list of dictionaries representing the conversation. Each dictionary contains:
+    *   **role**: The role of the speaker (`system`, `user`, or `assistant`).
+    *   **content**: The text content of the message.
+*   **source**: The origin of the data sample (`airflow` or `magpie`).
+*   **metadata**: A dictionary containing additional information:
+    *   For Airflow samples: May include topic classification or validation status.
+    *   For Magpie samples: Includes original metadata from the source dataset.
 
-## Training Recommendations
+## Source Data
 
-### Hyperparameters
-- **Model:** Qwen/Qwen2.5-Coder-1.5B-Instruct or larger
-- **Method:** LoRA/QLoRA fine-tuning (recommended: Unsloth)
-- **Epochs:** 3-5 epochs
-- **Batch Size:** 4-8 (with gradient accumulation to effective batch size of 32)
-- **Learning Rate:** 1e-4 to 2e-4
-- **LoRA rank:** 16-32
-- **Max Sequence Length:** 4096 tokens
+### Airflow Instructions (`source: "airflow"`)
+These samples are generated using a **knowledge distillation** process.
+*   **Generation Method**:
+    1.  **Sourcing**: We mined diverse DAG examples directly from the [official Apache Airflow repository](https://github.com/apache/airflow) to ensure alignment with official patterns and best practices.
+    2.  **Validation**: Each mined DAG underwent strict validation using AST parsing and a custom validator to ensure:
+        *   Valid Python syntax
+        *   Unique and valid `task_id`s
+        *   Absence of cyclic dependencies
+    3.  **Instruction Generation**: We employed **Claude** to generate high-quality, diverse natural language instructions corresponding to these valid DAG code blocks, effectively distilling the knowledge from the codebase into instruction-response pairs.
+*   **Goal**: To teach the model domain-specific syntax and best practices for Apache Airflow using verified, high-quality examples.
 
-### System Prompts for Inference
+### Magpie General Python (`source: "magpie"`)
+These samples are subsets from the [**{magpie_dataset_id}**](https://huggingface.co/datasets/{magpie_dataset_id}) dataset.
+*   **Selection**: We filtered for general Python programming tasks (algorithms, data structures) to maintain the model's general coding capabilities (preventing catastrophic forgetting).
+*   **Goal**: To ensure the fine-tuned model remains a competent general-purpose Python coding assistant.
 
-For **Airflow DAG generation**:
-```
-You are an expert Apache Airflow developer. Generate complete, valid, and executable Airflow DAG code based on the given requirements. Respond with Python code that follows Airflow best practices.
-```
+## Personal and Sensitive Information
 
-For **general Python tasks**:
-```
-You are an expert Python developer. Provide complete, working code solutions for programming tasks. Include brief explanations of key concepts when helpful.
-```
+This dataset consists entirely of:
+1.  **Synthetic Airflow Code**: Generating hypothetical DAGs for common use cases.
+2.  **Synthetic/Distilled Python Code**: General programming problems from the Magpie dataset.
+
+None of the data contains real user data, private keys, personally identifiable information (PII), or confidential enterprise code.
 
 ## Dataset Statistics
 

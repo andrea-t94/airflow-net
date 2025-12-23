@@ -152,7 +152,9 @@ def main():
         train_count=train_count,
         eval_count=eval_count,
         test_count=test_count,
-        repo_name=repo_name
+        test_count=test_count,
+        repo_name=repo_name,
+        magpie_dataset_id=config['magpie']['source_dataset']
     )
     
     with open("dataset_card.md", "w") as f:

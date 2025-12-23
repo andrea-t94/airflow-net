@@ -10,16 +10,12 @@ We use a custom AST-based parser (`DAGValidator`) to strictly enforce that gener
 
 ### Validation Checks
 
-#### 🔴 Critical Failures (Invalid DAG)
 These errors render the DAG unusable or unparseable.
 *   **SYNTAX_ERROR**: Malformed Python code that fails `ast.parse()` (e.g., missing colons, unbalanced parens).
 *   **CIRCULAR_DEPENDENCY**: A loop in the task dependency graph (e.g., `A >> B >> A`), which prevents the DAG from loading.
 *   **EMPTY_DAG**: A file containing no DAG definition or task operators.
 *   **PARSE_ERROR**: General runtime exceptions during AST traversal.
-
-#### ⚠️ Warnings (Poor Quality)
 *   **DUPLICATE_TASK_ID**: Multiple tasks sharing the same `task_id` (causes runtime overwrites).
-*   **MULTIPLE_DAGS**: Defining more than one DAG concept in a single file (bad practice for this specific use case).
 
 ### Metrics
 We track the **Validity Rate (%)**: The percentage of generated samples that pass all critical checks.

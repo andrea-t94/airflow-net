@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 def save_results(dags: List[Dict], missing_versions: List[Dict], output_file: str) -> str:
     """Save results to research/artifacts/01_raw_dags folder with metadata tracking."""
     # Create output directory if it doesn't exist
-    datasets_dir = Path("research/artifacts/01_raw_dags")
+    datasets_dir = Path("research/artifacts/data/01_raw_dags")
     datasets_dir.mkdir(parents=True, exist_ok=True)
 
     final_path = datasets_dir / output_file

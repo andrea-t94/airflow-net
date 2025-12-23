@@ -92,11 +92,11 @@ def _get_env_variable(var_name: str, required: bool = True) -> str:
 
 def get_input_dataset_path(config: Dict[str, Any] = None) -> str:
     """Always use dags.jsonl as input dataset."""
-    dataset_path = Path("research/artifacts/01_raw_dags/dags.jsonl")
+    dataset_path = Path("research/artifacts/data/01_raw_dags/dags.jsonl")
     if not dataset_path.exists():
         # check relative usage
-        if Path("../../research/artifacts/01_raw_dags/dags.jsonl").exists():
-             dataset_path = Path("../../research/artifacts/01_raw_dags/dags.jsonl")
+        if Path("../../research/artifacts/data/01_raw_dags/dags.jsonl").exists():
+             dataset_path = Path("../../research/artifacts/data/01_raw_dags/dags.jsonl")
              
     if not dataset_path.exists():
         raise FileNotFoundError(f"Input dataset file not found: {dataset_path}")

@@ -8,9 +8,9 @@ hf:
 
 # Paths (relative to project root usually, but script will handle resolution)
 paths:
-  airflow_raw: "research/artifacts/02_instruct_dags/airflow_instructions.jsonl"
-  magpie_output: "research/artifacts/magpie_data/general_python_replay_buffer.jsonl"
-  output_dir: "research/artifacts/magpie_data"
+  airflow_raw: "research/artifacts/data/02_instruct_dags/airflow_instructions.jsonl"
+  magpie_output: "research/artifacts/data/03_magpie_data/general_python_replay_buffer.jsonl"
+  output_dir: "research/artifacts/data/03_magpie_data"
 
 # Magpie Settings
 magpie:

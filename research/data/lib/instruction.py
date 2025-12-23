@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def ensure_output_dir() -> Path:
-    output_dir = Path("research/artifacts/02_instruct_dags")
+    output_dir = Path("research/artifacts/data/02_instruct_dags")
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 

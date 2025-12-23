@@ -47,8 +47,36 @@ AirflowNet is a research project dedicated to creating lightweight, specialized 
 ## 🛠️ Usage
 
 ### Installation
+
+We recommend using `uv` for lightning-fast dependency management, but standard `pip` works too.
+
+#### Prerequisites
+- Python 3.9+
+- [uv](https://github.com/astral-sh/uv) (optional, strictly recommended)
+
+#### 1. Setup Virtual Environment
 ```bash
-pip install -e .
+# Using uv (fastest)
+uv venv
+source .venv/bin/activate
+
+# OR using standard python
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+#### 2. Install Dependencies
+
+**For Serving / Usage (Lightweight)**
+If you just want to run the model server or use the CLI:
+```bash
+uv pip install -e .  # or pip install -e .
+```
+
+**For Research / Development**
+If you want to run mining scripts, fine-tuning, or evaluation:
+```bash
+uv pip install -e ".[research]" # or pip install -e ".[research]"
 ```
 
 ### Serve the Model

@@ -36,23 +36,39 @@ class ClaudeBatchProcessor:
                 batch = self.client.beta.messages.batches.retrieve(batch_id)
                 status = batch.processing_status
 
-                if status != last_status:
-                    self.logger.info(f"📊 Status: {status} (elapsed: {time.time() - start_time:.1f}s)")
-                    if hasattr(batch, 'request_counts'):
-                        counts = batch.request_counts
-                        total = counts.total or 0
-                        done = (counts.succeeded or 0) + (counts.errored or 0) + (counts.canceled or 0)
+                # Log status changes
+                elapsed = time.time() - start_time
+                self.logger.info(f"📊 Status: {status} (elapsed: {elapsed:.1f}s)")
+
+                if hasattr(batch, 'request_counts'):
+                    counts = batch.request_counts
+                    try:
+                        # Calculate total from sum of all states
+                        processing = getattr(counts, 'processing', 0) or 0
+                        succeeded = getattr(counts, 'succeeded', 0) or 0
+                        errored = getattr(counts, 'errored', 0) or 0
+                        canceled = getattr(counts, 'canceled', 0) or 0
+                        expired = getattr(counts, 'expired', 0) or 0
+                        total = processing + succeeded + errored + canceled + expired
+                        done = succeeded + errored + canceled + expired
                         if total > 0:
                             self.logger.info(f"   Progress: {done}/{total} ({done/total*100:.1f}%)")
-                    last_status = status
+                    except Exception as e:
+                        self.logger.debug(f"Could not calculate progress: {e}")
 
+                # Check for terminal status
                 if status in ["ended", "failed", "canceled", "expired"]:
+                    self.logger.info(f"✅ Batch completed with status: {status}")
                     return batch
 
                 time.sleep(self.poll_interval)
 
             except Exception as e:
                 self.logger.error(f"Error polling batch: {e}")
+                # Don't continue indefinitely on repeated errors
+                elapsed = time.time() - start_time
+                if elapsed > 3600:  # 1 hour timeout
+                    raise RuntimeError(f"Batch polling timed out after {elapsed:.1f}s")
                 time.sleep(self.poll_interval)
 
     def download_batch_results(self, batch_id: str) -> List[Dict]:

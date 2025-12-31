@@ -1,19 +1,18 @@
 {
-  "total_dags": 361,
-  "syntax_valid_count": 322,
-  "multifile_count": 47,
+  "total_dags": 418,
+  "syntax_valid_count": 354,
   "versions": {
-    "2.7.2": 361
+    "2.7.2": 324,
+    "2.8.4": 94
   },
   "length_distribution": {
-    "short": 83,
-    "medium": 188,
-    "long": 90
+    "short": 108,
+    "medium": 214,
+    "long": 96
   },
   "missing_versions": [],
   "mining_metadata": {
-    "mining_timestamp": "2025-11-19T17:21:17.293787",
-    "is_test_run": true,
-    "total_dags": 361
+    "mining_timestamp": "2025-12-30T14:55:45.596711",
+    "total_dags": 418
   }
 }

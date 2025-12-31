@@ -8,22 +8,17 @@ This script:
 3. Combines datasets and splits into train/eval/test.
 4. Generates a dataset card.
 5. Uploads to Hugging Face Hub (optional).
+Run as module: python -m research.data.scripts.03_create_dataset
 """
 
 import argparse
 import sys
-import os
 from pathlib import Path
 from datasets import load_dataset, DatasetDict, concatenate_datasets
 from huggingface_hub import HfApi
 
-# Modify sys.path to ensure we can import from lib
-current_dir = Path(__file__).resolve().parent
-research_dir = current_dir.parent
-sys.path.append(str(research_dir))
-
-from lib.config_loader import load_dataset_config
-from lib import magpie
+from research.data.lib.config_loader import load_dataset_config
+from research.data.lib import magpie
 
 def main():
     parser = argparse.ArgumentParser(description="Create and upload Airflow dataset")
@@ -45,8 +40,8 @@ def main():
     # Resolve paths
     # Assuming paths in config are relative to project root or absolute
     # If they are relative, we need to locate project root
-    # Heuristic: research_dir is .../research/data. Project root is .../
-    project_root = research_dir.parent.parent
+    # Heuristic: this file is .../research/data/scripts/. Project root is .../
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
     
     airflow_path = project_root / config['paths']['airflow_raw']
     magpie_output_path = project_root / config['paths']['magpie_output']
@@ -139,7 +134,7 @@ def main():
     mp_pct = (mp_count / total_samples) * 100
     
     # Load template
-    template_path = research_dir / "templates" / "dataset_card.md"
+    template_path = project_root / "research" / "data" / "templates" / "dataset_card.md"
     with open(template_path, "r") as f:
         template = f.read()
         
@@ -151,7 +146,6 @@ def main():
         magpie_pct=mp_pct,
         train_count=train_count,
         eval_count=eval_count,
-        test_count=test_count,
         test_count=test_count,
         repo_name=repo_name,
         magpie_dataset_id=config['magpie']['source_dataset']

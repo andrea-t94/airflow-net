@@ -4,13 +4,23 @@ Done
 
 
 To do
-- optimise research/data: 1. simplify each and every component, 2. check if we are using src module for validation, 3. add instermediate artifacts to repo
+- deploy sth locally
+- write two blog:
+     1. modelling (objective is local to mimic llm, find data, fine tune and eval) + next steps
+     2. deploying (system designed, how llama.cpp inference works and local performances evaluation) + next steps
 
 
 Next steps
+- dataset improvements:
+- - scrape more DAG files
+- - use better LLM to create instructions
+- - add context to the instructions (e.g. what tech stack is used)
+- - end-to-end evaluation of DAG files
+- - new type of data
+
 - mem bound improvements:
 - - on M1: try MLX, quantised KV cache, not spec decoding (I am already almost at mem bandwidht, having 8 small models is bandwidth consuming, it is beneficial only if draft is really good, but we are talking about very small models here...)
--  deploy GPUs inference: increase workers + vLLM pagedAttention and run a benchmark (TTFT, TPS, cost efficency=) + dedicated GPU quantisazton (AWQ)
+-  deploy GPUs inference: increase workers + vLLM pagedAttention and run a benchmark (TTFT, TPS, cost efficency=) + dedicated GPU quantisazton (AWQ) + LMCache
 - inference repo beautify. Has to be runnable stand alone and I want to write a blog with that (how do I calculate CTX, batch, input output?)
 - quantisation, distillation, pruning?
 

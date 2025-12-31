@@ -9,7 +9,6 @@ import time
 import argparse
 from pathlib import Path
 
-# Assumes research.data.lib is in python path
 from research.data.lib.instruction import ClaudeBatchInstructionGenerator
 from research.data.lib.config_loader import load_generation_config, get_api_key, get_input_dataset_path
 

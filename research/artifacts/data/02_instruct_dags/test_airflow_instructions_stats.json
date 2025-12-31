@@ -1,6 +1,6 @@
 {
-  "total_processed": 5,
-  "successful_generations": 15,
-  "failed_generations": 0,
-  "api_calls": 5
+  "total": 5,
+  "success": 5,
+  "failed": 0,
+  "generated": 15
 }

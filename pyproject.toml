@@ -33,4 +33,4 @@ research = [
 airflow-net = "airflow_net.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/airflow_net"]
+packages = ["src/airflow_net", "research"]

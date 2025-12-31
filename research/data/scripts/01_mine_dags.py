@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 
-import sys
 import logging
 import json
+import argparse
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict
 
-# Add lib to path (pointing to research/data/lib)
-sys.path.insert(0, str(Path(__file__).parent.parent / 'lib'))
-
-from mining import AirflowDAGMiner
-from config_loader import load_mining_config, get_github_token
+from research.data.lib.mining import AirflowDAGMiner
+from research.data.lib.config_loader import load_mining_config, get_github_token
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -96,18 +93,32 @@ def generate_summary(dags: List[Dict], missing_versions: List[Dict]) -> Dict:
 
 def main():
     """Run DAG mining using configuration."""
+    parser = argparse.ArgumentParser(description="Airflow DAG Miner")
+    parser.add_argument('--test', action='store_true', help='Run in test mode (2 versions only)')
+    parser.add_argument('--versions', nargs='+', help='Override versions to mine')
+    parser.add_argument('--output', help='Override output filename')
+    args = parser.parse_args()
+
     try:
         # Load configuration
         config = load_mining_config()
-        
+
         # Get token explicitly
         github_token = get_github_token()
 
-        versions = config['airflow_versions']
-        print("🚀 Starting Full DAG Mining")
+        # Determine versions to mine
+        if args.test:
+            # Test mode: use only first 2 versions
+            versions = config['airflow_versions'][:2]
+            output_file = 'test_dags.jsonl'
+            logger.info("🧪 Running in TEST mode (2 versions)")
+        else:
+            versions = args.versions if args.versions else config['airflow_versions']
+            output_file = args.output if args.output else config['mining']['output_file']
+            logger.info("🚀 Running in FULL mode")
 
         print(f"📝 Versions: {', '.join(versions)}")
-        print(f"📄 Output: {config['mining']['output_file']}")
+        print(f"📄 Output: {output_file}")
         print()
 
         # Initialize miner with just the token
@@ -126,7 +137,7 @@ def main():
         output_path = save_results(
             all_dags,
             missing_versions,
-            config['mining']['output_file']
+            output_file
         )
 
         print(f"\n✅ Mining completed successfully!")

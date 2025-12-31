@@ -11,7 +11,7 @@ To do
 
 
 Next steps
-- dataset improvements:
+- dataset improvements: (see changelog 22)
 - - scrape more DAG files
 - - use better LLM to create instructions
 - - add context to the instructions (e.g. what tech stack is used)

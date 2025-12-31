@@ -22,3 +22,4 @@
 21. Started to restructure the repo and cleaning up. Switched back to `llama.cpp` [python] for simplicity ("Library First" philosophy).
     - **Pros:** No C++ compilation needed for users, unified `airflow-net serve` CLI, essentially zero perf loss (still runs C++ backend with flash_attn).
     - **Cons (Parity Loss):** We lose explicit `n_parallel` slot allocation control. The Python server uses dynamic batching which is easier but less deterministic under varying load than the C++ server's strict slot reservation.
+22. From the final evaluation I've noticed several improvements on the data quality: drop data leakage (airflow tests), increase or drop niche libraries, augoment to help model generalise (less pythonic and also different numbers, not only 20)

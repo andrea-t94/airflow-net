@@ -13,6 +13,7 @@ import anthropic
 import logging
 
 from research.lib.batch_processor import ClaudeBatchProcessor
+from airflow_net.prompts import DEFAULT_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class ClaudeBatchInstructionGenerator(ClaudeBatchProcessor):
             'messages': [
                 {
                     'role': 'system',
-                    'content': 'You are an expert Apache Airflow developer. Generate complete, valid Airflow DAGs based on given requirements.'
+                    'content': DEFAULT_SYSTEM_PROMPT
                 },
                 {
                     'role': 'user',

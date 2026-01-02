@@ -24,7 +24,7 @@ class AirflowAgent:
         attempts = 0
         
         while attempts <= self.max_retries:
-            logger.info(f"Attempt {attempts + 1}/{self.max_retries + 1}")
+            logger.info(f"Generating DAG (Attempt {attempts + 1}/{self.max_retries + 1})...")
             
             # 1. Generate code
             code = self.engine.generate(current_instruction, airflow_version)
@@ -33,7 +33,7 @@ class AirflowAgent:
             errors = self.validator.validate_content(code)
             
             if not errors:
-                logger.info("✅ Generation successful and validated!")
+                logger.info("SUCCESS: Code generated and validated successfully!")
                 return {
                     "code": code,
                     "success": True,
@@ -42,16 +42,20 @@ class AirflowAgent:
                 }
             
             # 3. If errors, append to prompt and retry
-            error_msg = "\n".join([str(e) for e in errors])
-            logger.warning(f"❌ Validation failed:\n{error_msg}")
+            error_msg = "\n".join([f"- {e}" for e in errors])
+            logger.warning(f"Validation found issues in attempt {attempts + 1}:")
+            logger.warning(error_msg)
             
-            # Refinement prompt (simple concatenation for now)
-            # In a real agent, we might structure this as a conversation history
-            current_instruction = f"{instruction}\n\nThe previous attempt had the following errors:\n{error_msg}\n\nPlease fix these errors and regenerate the DAG."
+            if attempts < self.max_retries:
+                logger.info("Auto-correcting flaws and retrying...")
+                
+                # Refinement prompt (simple concatenation for now)
+                # In a real agent, we might structure this as a conversation history
+                current_instruction = f"{instruction}\n\nThe previous attempt had the following errors:\n{error_msg}\n\nPlease fix these errors and regenerate the DAG."
             
             attempts += 1
             
-        logger.error("❌ Max retries reached. Generation failed.")
+        logger.error("ERROR: Max retries reached. Could not generate valid code.")
         return {
             "code": code,
             "success": False,

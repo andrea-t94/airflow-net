@@ -46,13 +46,74 @@ AirflowNet is a research project dedicated to creating lightweight, specialized 
 
 ## 🛠️ Usage
 
-### Installation
+### Quick Start (Recommended)
 
-We recommend using `uv` for lightning-fast dependency management, but standard `pip` works too.
+The easiest way to use `airflow-net` is to install it as a standalone tool using `uv`. This gives you the `airflow-net` command globally.
 
-#### Prerequisites
-- Python 3.9+
-- [uv](https://github.com/astral-sh/uv) (optional, strictly recommended)
+```bash
+# 1. Install tool
+uv tool install .
+
+# 2. Chat with the Agent (Auto-starts server)
+airflow-net chat -i "Create a DAG that runs dbt build every morning at 6am"
+```
+
+The `chat` command automatically starts a background server if one isn't running. Once finished, you can stop it:
+
+```bash
+airflow-net stop
+```
+
+### Configuration
+The CLI persists your preferences (like target Airflow version) in `~/.airflow_net/config.json`.
+
+**First Run Experience**:
+When you run `chat` for the first time, it will interactively ask for your target Airflow version.
+
+**Manage Config**:
+```bash
+# Set default Airflow version
+airflow-net config --set-version 2.9.0
+
+# Show current config
+airflow-net config --show
+```
+
+### Modes
+
+#### 1. Server Mode (`serve`)
+The server hosts the LLM and provides an OpenAI-compatible API.
+
+```bash
+# Default (Foreground)
+airflow-net serve
+
+# Background (Detached)
+airflow-net serve --detach
+
+# Stop background instances
+airflow-net stop
+```
+
+#### 2. Chat Mode (`chat`)
+The client interacts with the running server to generate DAGs.
+- **Auto-Persist:** If no server is detected, `chat` starts one in the background.
+- **Version Awareness:** Uses your configured Airflow version automatically.
+
+```bash
+# Basic usage (uses defaults)
+airflow-net chat -i "Create a simple hello world DAG"
+
+# Override version for one run
+airflow-net chat -i "Create a DAG..." --airflow-version 2.10.0
+
+# Save output to file
+airflow-net chat -i "Create a DAG for data ingestion" -o my_dag.py
+```
+
+### Development Installation
+
+If you want to contribute or run research scripts:
 
 #### 1. Setup Virtual Environment
 ```bash
@@ -67,22 +128,14 @@ source .venv/bin/activate
 
 #### 2. Install Dependencies
 
-**For Serving / Usage (Lightweight)**
-If you just want to run the model server or use the CLI:
+**For Core dev:**
 ```bash
-uv pip install -e .  # or pip install -e .
+uv pip install -e .
 ```
 
-**For Research / Development**
-If you want to run mining scripts, fine-tuning, or evaluation:
+**For Research (Mining/Training):**
 ```bash
-uv pip install -e ".[research]" # or pip install -e ".[research]"
-```
-
-### Serve the Model
-```bash
-# Start the local inference server (requires GGUF model)
-airflow-net serve --model ./models/airflow-net-qwen2.5-1.5b.gguf
+uv pip install -e ".[research]"
 ```
 
 ### Research Pipeline (For Dataset Creation)

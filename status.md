@@ -5,6 +5,13 @@ Done
 
 To do
 - deploy sth locally
+- - check if deployment if hardware agnostic (e.g. does it work only on M1 GPU? does it work only on mac/linux?)
+- - tweak inference parameters based on your findings for M1, assuming one request at time and document it
+- - create mcp server and test it with claude code, cursor and antygravity
+- - check perf against qwen 1.5 coder
+- - check uv.lock is needed
+- - add test suite, CI/CD and package first version
+- fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible
 - write two blog:
      1. modelling (objective is local to mimic llm, find data, fine tune and eval) + next steps
      2. deploying (system designed, how llama.cpp inference works and local performances evaluation) + next steps

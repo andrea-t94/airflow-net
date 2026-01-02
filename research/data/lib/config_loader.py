@@ -9,11 +9,9 @@ import os
 import sys
 
 # Load .env file if it exists
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+from dotenv import load_dotenv
+load_dotenv()
+
 
 
 def load_config(config_file: str) -> Dict[str, Any]:

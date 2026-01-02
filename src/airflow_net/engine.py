@@ -9,7 +9,9 @@ import concurrent.futures
 from pathlib import Path
 from typing import Dict, Any, Optional
 import openai
-from datasets import load_dataset
+# from datasets import load_dataset -> Moved to local scope
+
+from .prompts import DEFAULT_SYSTEM_PROMPT
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -25,34 +27,9 @@ class LlamaServerDAGGenerator:
         # Verify connection
         try:
             self.client.models.list()
-            logger.info(f"✅ Connected to Llama Server at {base_url}")
+            logger.info(f"SUCCESS: Connected to Llama Server at {base_url}")
         except Exception as e:
-            logger.error(f"❌ Could not connect to server at {base_url}. Is it running?")
-            logger.error(f"Error: {e}")
-            sys.exit(1)
-
-    def _create_prompt(self, instruction: str, airflow_version: str = "2.7.2") -> str:
-        """Create a prompt for DAG generation."""
-        return f"""<|im_start|>system
-You are an expert Apache Airflow developer. Generate a complete, valid Airflow DAG based on the given instruction.
-<|im_end|>
-<|im_start|>user
-Create an Airflow DAG with the following requirements:
-
-Instruction: {instruction}
-Airflow Version: {airflow_version}
-
-Requirements:
-- Generate complete, syntactically correct Python code
-- Include all necessary imports
-- Follow Airflow best practices
-- Make sure the DAG is executable
-
-Generate only the Python code for the DAG:
-<|im_end|>
-<|im_start|>assistant
-```python
-"""
+            raise ConnectionError(f"Could not connect to server at {base_url}")
 
     def _extract_code(self, response: str) -> str:
         """Extract Python code from the response."""
@@ -79,24 +56,24 @@ Generate only the Python code for the DAG:
         airflow_version = parts[1].strip() if len(parts) > 1 else '2.7.2'
         metadata = record.get('metadata') or {}
 
-        prompt = self._create_prompt(instruction, airflow_version)
-
         try:
             # Call the Server API
-            # Using optimal params from performance_evaluation.md:
+            # Using optimal params from previous evaluations:
             # - max_tokens=2048 (recommended for ~90% coverage)
             # - temperature=0.1 (deterministic generation)
-            response = self.client.completions.create(
+            response = self.client.chat.completions.create(
                 model="qwen",  # Name doesn't matter for local server
-                prompt=prompt,
+                messages=[
+                    {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"{instruction}\n\nAirflow Version: {airflow_version}"}
+                ],
                 max_tokens=2048,
                 temperature=0.1,
                 top_p=0.9,
-                stop=["<|im_end|>", "```"],
-                echo=False
+                stop=["<|im_end|>"], # Still good to have, though chat template usually handles it
             )
             
-            generated_text = response.choices[0].text
+            generated_text = response.choices[0].message.content
             clean_code = self._extract_code(generated_text)
 
             # Convert to ChatML format for Qwen Coder 2.5 training
@@ -104,7 +81,7 @@ Generate only the Python code for the DAG:
                 'messages': [
                     {
                         'role': 'system',
-                        'content': 'You are an expert Apache Airflow developer. Generate complete, valid Airflow DAGs based on given requirements.'
+                        'content': DEFAULT_SYSTEM_PROMPT
                     },
                     {
                         'role': 'user',
@@ -128,73 +105,25 @@ Generate only the Python code for the DAG:
             logger.error(f"Error processing DAG: {e}")
             return None
 
-    def generate_dags_from_dataset(self, input_file: Optional[str], output_file: str,
-                                  hf_dataset: Optional[str] = None,
-                                  hf_split: str = "test",
-                                  limit: Optional[int] = None) -> Dict[str, Any]:
-        """Generate DAGs from a JSONL dataset or HuggingFace dataset using parallel server requests."""
-        output_path = Path(output_file)
+    def generate(self, instruction: str, airflow_version: str = "2.7.2") -> str:
+        """Generate a single DAG from an instruction string."""
+        try:
+            response = self.client.chat.completions.create(
+                 model="qwen",
+                 messages=[
+                    {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"{instruction}\n\nAirflow Version: {airflow_version}"}
+                 ],
+                 max_tokens=2048,
+                 temperature=0.1,
+                 top_p=0.9,
+                 stop=["<|im_end|>"]
+            )
+            return self._extract_code(response.choices[0].message.content)
+        except Exception as e:
+            logger.error(f"Error generating DAG: {e}")
+            raise e
 
-        # Create output directory
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Read Records - either from HF or local file
-        records = []
-        if hf_dataset:
-            logger.info(f"Loading dataset from HuggingFace: {hf_dataset} (split: {hf_split})")
-            dataset = load_dataset(hf_dataset, split=hf_split, download_mode='reuse_cache_if_exists')
-            records = list(dataset)
-            logger.info(f"✓ Loaded {len(records)} records from HuggingFace (using cache if available)")
-        else:
-            input_path = Path(input_file)
-            if not input_path.exists():
-                raise FileNotFoundError(f"Input file not found: {input_file}")
-
-            with open(input_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        records.append(json.loads(line.strip()))
-            logger.info(f"✓ Loaded {len(records)} records from {input_file}")
-
-        # Apply limit if specified
-        if limit and limit < len(records):
-            records = records[:limit]
-            logger.info(f"Limited to {limit} records")
-
-        logger.info(f"Processing {len(records)} records using {self.workers} workers")
-        logger.info(f"Output: {output_file}")
-
-        all_results = []
-        start_time = time.time()
-
-        # Execute in parallel
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.workers) as executor:
-            # Submit all tasks
-            futures = [executor.submit(self._generate_single_dag_task, record) for record in records]
-            
-            for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
-                result = future.result()
-                if result:
-                    all_results.append(result)
-                
-                # Logging
-                elapsed = time.time() - start_time
-                rate = i / elapsed if elapsed > 0 else 0
-                if i % 5 == 0 or i == len(records):
-                    logger.info(f"Processed {i}/{len(records)} ({rate:.2f} DAGs/sec)")
-
-        # Save to file
-        with open(output_path, 'w', encoding='utf-8') as f:
-            for result in all_results:
-                f.write(json.dumps(result) + '\n')
-
-        total_time = time.time() - start_time
-        return {
-            'total_generated': len(all_results),
-            'output_file': str(output_path),
-            'elapsed_time': total_time,
-            'generation_rate': len(all_results) / total_time
-        }
 
 def main():
     parser = argparse.ArgumentParser(description="Llama Server DAG Generation Client")
@@ -265,14 +194,14 @@ def main():
                 limit=args.limit
             )
 
-        print(f"\n✅ Generation complete!")
-        print(f"📊 Generated: {stats['total_generated']} DAGs")
-        print(f"📊 Rate: {stats['generation_rate']:.2f} DAGs/sec")
-        print(f"📁 Saved to: {stats['output_file']}")
+        print(f"\nSUCCESS: Generation complete!")
+        print(f"INFO: Generated: {stats['total_generated']} DAGs")
+        print(f"INFO: Rate: {stats['generation_rate']:.2f} DAGs/sec")
+        print(f"INFO: Saved to: {stats['output_file']}")
         return 0
 
     except Exception as e:
-        logger.error(f"❌ Failed: {e}")
+        logger.error(f"ERROR: Failed: {e}")
         return 1
 
 if __name__ == "__main__":

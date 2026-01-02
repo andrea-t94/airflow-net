@@ -386,10 +386,10 @@ class DAGValidator:
     def print_report(self):
         """Print validation report"""
         if not self.errors:
-            print("✅ All DAG files validated successfully!")
+            print("SUCCESS: All DAG files validated successfully!")
             return True
         
-        print(f"❌ Found {len(self.errors)} validation error(s):\n")
+        print(f"ERROR: Found {len(self.errors)} validation error(s):\n")
         
         # Group errors by type
         errors_by_type = defaultdict(list)

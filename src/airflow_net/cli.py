@@ -8,17 +8,21 @@ import requests
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional
-from huggingface_hub import hf_hub_download
 
 from airflow_net.agent import AirflowAgent
+from airflow_net.server_manager import (
+    resolve_model_path, 
+    get_server_cmd, 
+    ensure_server_running,
+    DEFAULT_REPO,
+    DEFAULT_FILENAME
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
-DEFAULT_REPO = "andrea-t94/qwen2.5-1.5b-airflow-instruct-gguf"
-DEFAULT_FILENAME = "qwen2.5-1.5b-instruct.Q4_K_M.gguf" 
 CONFIG_DIR = Path.home() / ".airflow_net"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
@@ -38,48 +42,6 @@ def _save_config(config: Dict[str, Any]):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
-
-def _get_server_cmd(model_path: str, host: str = "0.0.0.0", port: int = 8000, 
-                   layers: int = 99, ctx: int = 4096, flash_attn: bool = False) -> list:
-    """Constructs the command to run the llama.cpp server."""
-    cmd = [
-        sys.executable, "-m", "llama_cpp.server",
-        "--model", str(model_path),
-        "--host", host,
-        "--port", str(port),
-        "--n_gpu_layers", str(layers),
-        "--n_ctx", str(ctx),
-        "--n_batch", "2048",
-    ]
-    if flash_attn:
-        cmd.extend(["--flash_attn", "true"])
-    return cmd
-
-def _resolve_model_path(model_path: str = None, hf_repo: str = None, hf_file: str = None) -> str:
-    """
-    Resolves the model path based on arguments:
-    1. If model_path is provided, checks if it exists locally.
-    2. If hf_repo/hf_file are provided, downloads from HF.
-    3. If neither, downloads the default model from HF.
-    """
-    if model_path:
-        path = Path(model_path)
-        if not path.exists():
-            raise click.ClickException(f"ERROR: Model file not found at {model_path}")
-        return str(path)
-
-    # If no local model specified, determine which HF model to download
-    repo_id = hf_repo or DEFAULT_REPO
-    filename = hf_file or DEFAULT_FILENAME
-
-    click.echo(f"INFO: Ensuring model is available from {repo_id} ({filename})...")
-    try:
-        # huggingface_hub handles caching automatically
-        cached_path = hf_hub_download(repo_id=repo_id, filename=filename)
-        click.echo(f"SUCCESS: Model available at: {cached_path}")
-        return cached_path
-    except Exception as e:
-        raise click.ClickException(f"ERROR: Downloading model: {e}")
 
 @click.group()
 def main():
@@ -114,8 +76,11 @@ def config(set_version, show):
 def install(hf_repo, hf_file):
     """Downloads the model (without starting server)."""
     click.echo("Installing model...")
-    _resolve_model_path(model_path=None, hf_repo=hf_repo, hf_file=hf_file)
-    click.echo("SUCCESS: Installation complete.")
+    try:
+        resolve_model_path(model_path=None, hf_repo=hf_repo, hf_file=hf_file)
+        click.echo("SUCCESS: Installation complete.")
+    except Exception as e:
+        raise click.ClickException(str(e))
 
 @main.command()
 @click.option('--host', default="0.0.0.0", help="Host to bind to.")
@@ -133,7 +98,7 @@ def serve(host, port, model, hf_repo, hf_file, layers, ctx, detach, cpu, flash_a
     
     # Resolve the model path (auto-download if needed)
     try:
-        final_model_path = _resolve_model_path(model, hf_repo, hf_file)
+        final_model_path = resolve_model_path(model, hf_repo, hf_file)
     except Exception as e:
         click.echo(e)
         return
@@ -153,7 +118,7 @@ def serve(host, port, model, hf_repo, hf_file, layers, ctx, detach, cpu, flash_a
     click.echo(f"INFO: Model: {final_model_path}")
     click.echo(f"INFO: Hardware: Layers={layers}, FlashAttn={flash_attn}")
     
-    cmd = _get_server_cmd(final_model_path, host, port, layers, ctx, flash_attn)
+    cmd = get_server_cmd(final_model_path, host, port, layers, ctx, flash_attn)
     env = os.environ.copy()
     
     if detach:
@@ -195,62 +160,6 @@ def stop():
     except Exception as e:
          click.echo(f"ERROR: Could not stop server: {e}")
 
-def _ensure_server_running(url: str):
-    """Checks if server is running, and starts a background detached one if not."""
-    
-    # 1. Check if server is already running
-    try:
-        requests.get(f"{url}/models", timeout=1)
-        click.echo(f"INFO: Connected to {url}")
-        return
-    except (requests.RequestException, Exception):
-        pass # Server not up
-
-    # 2. Logic to start server
-    if "localhost" not in url and "127.0.0.1" not in url:
-        raise click.ClickException(f"ERROR: Could not connect to remote server {url}")
-        
-    click.echo("INFO: Server not running. Starting background server (will remain running)...")
-    
-    model_path = _resolve_model_path()
-    
-    # Parse port
-    port = 8000
-    if ":" in url.split("/")[-2]:
-        try:
-            port = int(url.split(":")[-1].split("/")[0])
-        except:
-            pass
-            
-    # Auto-detect reasonable defaults for background auto-start
-    # For compatibility, we'll be conservative or try to detect?
-    # For now, let's keep the old behavior (optimistic GPU) but allow config later if needed.
-    # Ideally this would read from a config, but for now defaults are fine.
-    cmd = _get_server_cmd(model_path, port=port, flash_attn=True)
-    
-    # Start detached
-    process = subprocess.Popen(
-        cmd, 
-        stdout=subprocess.DEVNULL, 
-        stderr=subprocess.DEVNULL,
-        start_new_session=True 
-    )
-    
-    # Wait for ready
-    click.echo(f"INFO: Waiting for model to load found at PID {process.pid}...")
-    
-    # Poll for 90 seconds
-    for _ in range(30):
-        try:
-            requests.get(f"{url}/models", timeout=1)
-            click.echo("SUCCESS: Server ready. You can now run 'airflow-net chat' instantly.")
-            click.echo("IMPORTANT: Run 'airflow-net stop' when you are done to free up resources.")
-            return
-        except:
-            time.sleep(1)
-            
-    raise click.ClickException("ERROR: Timed out waiting for server to start.")
-
 @main.command()
 @click.option('--instruction', '-i', required=True, help="Instruction for DAG generation.")
 @click.option('--airflow-version', help="Target Airflow version (overrides config).")
@@ -276,7 +185,10 @@ def chat(instruction, airflow_version, output, url):
         click.echo(f"INFO: Using Airflow Version: {target_version}")
 
         # Ensure server is up
-        _ensure_server_running(url)
+        try:
+            ensure_server_running(url)
+        except Exception as e:
+            raise click.ClickException(str(e))
         
         # Now connect agent
         agent = AirflowAgent(server_url=url)
@@ -305,11 +217,36 @@ def chat(instruction, airflow_version, output, url):
         click.echo(f"ERROR: {e}")
 
 @main.command()
-def mcp():
+@click.option('--url', default="http://localhost:8000/v1", help="Server URL for model backend.")
+def mcp(url):
     """Launches the MCP server for Claude."""
-    click.echo("Starting MCP server...")
-    # TODO: Import and run the MCP server from interfaces.mcp
-    click.echo("Not yet implemented: MCP Server start")
+    # Silence noisy libraries
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
+    
+    try:
+        # Set config for the tool to pick up
+        os.environ["AIRFLOW_NET_SERVER_URL"] = url
+        
+        from airflow_net.interfaces.mcp import mcp
+        
+        # Pre-warm the server so it's ready for the first request
+        try:
+            ensure_server_running(url)
+        except Exception as e:
+             logger.warning(f"Failed to pre-warm server: {e}")
+        
+        # Provide a clear signal that we are ready
+        # Using stderr via logger is safe for MCP stdio transport
+        logger.info(f"MCP Server is up and running (Backend: {url})")
+             
+        mcp.run()
+    except ImportError:
+        click.echo("ERROR: mcp library not found or interfaces.mcp not implemented.")
+    except Exception as e:
+        click.echo(f"ERROR: {e}")
 
 if __name__ == '__main__':
     main()

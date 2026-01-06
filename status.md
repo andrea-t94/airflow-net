@@ -5,10 +5,8 @@ Done
 
 To do
 - deploy sth locally
-- - create mcp server and test it with claude code, cursor and antygravity
 - - check perf against qwen 1.5 coder
-- - check uv.lock is needed
-- - add test suite, CI/CD and package first version
+- - add test suite, CI/CD and package first version (e.g. cli/mcp start, generate a valid dag, mcp doesn't give timeout error when dag is re-generated, logs are sent about regeneration)
 - - add small script with doc to run benchmarks to publish serving performances
 - fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible
 - write two blog:

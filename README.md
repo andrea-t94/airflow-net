@@ -152,6 +152,37 @@ uv pip install -e .
 uv pip install -e ".[research]"
 ```
 
+## 🤖 MCP Server (Claude / Cursor)
+
+Airflow-Net implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io), allowing you to use your local specialized model as a tool inside AI assistants like **Claude Desktop**, **Claude Code**, or **Cursor**.
+
+### 1. Claude Code (CLI)
+Create a `.mcp.json` file in your project root:
+```json
+{
+  "mcpServers": {
+    "airflow-net": {
+      "command": "airflow-net",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+Then restart Claude Code (`claude restart` or just run `claude`). It will now have access to the `generate_airflow_dag` tool.
+
+### 2. Cursor
+1. Go to **Settings** > **Features** > **MCP**.
+2. Add a new server:
+   - **Name**: `airflow-net`
+   - **Type**: `stdio`
+   - **Command**: `airflow-net mcp`
+
+### Usage
+Once connected, you can simply ask your assistant:
+> "Generate an Airflow DAG that fetches Bitcoin prices every hour."
+
+The assistant will delegate the task to your local Airflow-Net model (auto-starting the inference server if needed) and return the validated code.
+
 ### Research Pipeline (For Dataset Creation)
 
 If you want to recreate the dataset or run the research pipeline:

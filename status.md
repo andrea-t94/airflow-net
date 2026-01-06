@@ -5,7 +5,6 @@ Done
 
 To do
 - deploy sth locally
-- - check perf against qwen 1.5 coder
 - - add test suite, CI/CD and package first version (e.g. cli/mcp start, generate a valid dag, mcp doesn't give timeout error when dag is re-generated, logs are sent about regeneration)
 - - add small script with doc to run benchmarks to publish serving performances
 - fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible

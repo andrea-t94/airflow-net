@@ -40,7 +40,7 @@ def _save_config(config: Dict[str, Any]):
         json.dump(config, f, indent=2)
 
 def _get_server_cmd(model_path: str, host: str = "0.0.0.0", port: int = 8000, 
-                   layers: int = 99, ctx: int = 34816, flash_attn: bool = False) -> list:
+                   layers: int = 99, ctx: int = 4096, flash_attn: bool = False) -> list:
     """Constructs the command to run the llama.cpp server."""
     cmd = [
         sys.executable, "-m", "llama_cpp.server",
@@ -124,12 +124,11 @@ def install(hf_repo, hf_file):
 @click.option('--hf-repo', help="Clean Override: Hugging Face Repo ID to download from.")
 @click.option('--hf-file', help="Clean Override: Hugging Face filename to download.")
 @click.option('--layers', default=99, help="Number of GPU layers (default: 99 for max GPU).")
-@click.option('--ctx', default=34816, help="Context size (default: 34816).")
-@click.option('--workers', default=8, help="Number of parallel workers.")
+@click.option('--ctx', default=4096, help="Context size (default: 4096).")
 @click.option('--detach', '-d', is_flag=True, help="Run server in background (detached).")
 @click.option('--cpu', is_flag=True, help="Force CPU mode (sets layers=0, disables flash attention).")
 @click.option('--flash-attn/--no-flash-attn', default=None, help="Enable/Disable Flash Attention (default: auto).")
-def serve(host, port, model, hf_repo, hf_file, layers, ctx, workers, detach, cpu, flash_attn):
+def serve(host, port, model, hf_repo, hf_file, layers, ctx, detach, cpu, flash_attn):
     """Launches the HTTP server (OpenAI-compatible) using llama-cpp-python."""
     
     # Resolve the model path (auto-download if needed)

@@ -24,3 +24,4 @@
     - **Cons (Parity Loss):** We lose explicit `n_parallel` slot allocation control. The Python server uses dynamic batching which is easier but less deterministic under varying load than the C++ server's strict slot reservation.
 22. From the final evaluation I've noticed several improvements on the data quality: drop data leakage (airflow tests), increase or drop niche libraries, augoment to help model generalise (less pythonic and also different numbers, not only 20)
 23. Deployed with llama.cpp as a cli tool that download any model (default mine fine tuned), apply airflow version and generate a VALID DAG. I have scaffolded the MCP server and cleaned up the repo. TBH it could be generalised to be a cli with ANY SML.
+24. fine tuned the deployment using n_batch02048 and ctx=4096 to cover p99 cases of prompt+output. This is coming from the old run_benchmarks script that I used to measure serving results that where finetuned with 8 workers.

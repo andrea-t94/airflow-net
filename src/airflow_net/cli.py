@@ -40,9 +40,9 @@ def _save_config(config: Dict[str, Any]):
         json.dump(config, f, indent=2)
 
 def _get_server_cmd(model_path: str, host: str = "0.0.0.0", port: int = 8000, 
-                   layers: int = 99, ctx: int = 34816) -> list:
+                   layers: int = 99, ctx: int = 34816, flash_attn: bool = False) -> list:
     """Constructs the command to run the llama.cpp server."""
-    return [
+    cmd = [
         sys.executable, "-m", "llama_cpp.server",
         "--model", str(model_path),
         "--host", host,
@@ -50,8 +50,10 @@ def _get_server_cmd(model_path: str, host: str = "0.0.0.0", port: int = 8000,
         "--n_gpu_layers", str(layers),
         "--n_ctx", str(ctx),
         "--n_batch", "2048",
-        "--flash_attn", "true",
     ]
+    if flash_attn:
+        cmd.extend(["--flash_attn", "true"])
+    return cmd
 
 def _resolve_model_path(model_path: str = None, hf_repo: str = None, hf_file: str = None) -> str:
     """
@@ -125,7 +127,9 @@ def install(hf_repo, hf_file):
 @click.option('--ctx', default=34816, help="Context size (default: 34816).")
 @click.option('--workers', default=8, help="Number of parallel workers.")
 @click.option('--detach', '-d', is_flag=True, help="Run server in background (detached).")
-def serve(host, port, model, hf_repo, hf_file, layers, ctx, workers, detach):
+@click.option('--cpu', is_flag=True, help="Force CPU mode (sets layers=0, disables flash attention).")
+@click.option('--flash-attn/--no-flash-attn', default=None, help="Enable/Disable Flash Attention (default: auto).")
+def serve(host, port, model, hf_repo, hf_file, layers, ctx, workers, detach, cpu, flash_attn):
     """Launches the HTTP server (OpenAI-compatible) using llama-cpp-python."""
     
     # Resolve the model path (auto-download if needed)
@@ -135,10 +139,22 @@ def serve(host, port, model, hf_repo, hf_file, layers, ctx, workers, detach):
         click.echo(e)
         return
 
+    # Handle Hardware Flags
+    if cpu:
+        layers = 0
+        if flash_attn is True:
+            click.echo("WARNING: --cpu flag passed but --flash-attn requested. Ignoring flash attention.")
+        flash_attn = False
+    else:
+        # If not CPU, default to Flash Attention unless explicitly disabled
+        if flash_attn is None:
+            flash_attn = True
+
     click.echo(f"INFO: Starting Airflow-Net Server on {host}:{port}...")
     click.echo(f"INFO: Model: {final_model_path}")
+    click.echo(f"INFO: Hardware: Layers={layers}, FlashAttn={flash_attn}")
     
-    cmd = _get_server_cmd(final_model_path, host, port, layers, ctx)
+    cmd = _get_server_cmd(final_model_path, host, port, layers, ctx, flash_attn)
     env = os.environ.copy()
     
     if detach:
@@ -207,7 +223,11 @@ def _ensure_server_running(url: str):
         except:
             pass
             
-    cmd = _get_server_cmd(model_path, port=port)
+    # Auto-detect reasonable defaults for background auto-start
+    # For compatibility, we'll be conservative or try to detect?
+    # For now, let's keep the old behavior (optimistic GPU) but allow config later if needed.
+    # Ideally this would read from a config, but for now defaults are fine.
+    cmd = _get_server_cmd(model_path, port=port, flash_attn=True)
     
     # Start detached
     process = subprocess.Popen(
@@ -221,7 +241,7 @@ def _ensure_server_running(url: str):
     click.echo(f"INFO: Waiting for model to load found at PID {process.pid}...")
     
     # Poll for 90 seconds
-    for _ in range(90):
+    for _ in range(30):
         try:
             requests.get(f"{url}/models", timeout=1)
             click.echo("SUCCESS: Server ready. You can now run 'airflow-net chat' instantly.")

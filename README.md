@@ -93,7 +93,21 @@ airflow-net serve --detach
 
 # Stop background instances
 airflow-net stop
+
+# Force CPU Mode (Hardware Agnostic)
+airflow-net serve --cpu
+
+# Explicitly disable Flash Attention (e.g. older GPUs)
+airflow-net serve --no-flash-attn
 ```
+
+#### Hardware Support
+- **Mac (Apple Silicon)**: Fully supported with Metal acceleration.
+- **Linux (Nvidia)**: Fully supported with CUDA acceleration.
+- **Windows**:
+  - `serve` works (CPU/CUDA) but `stop` and `--detach` commands are currently not supported.
+  - Recommended to run in foreground mode on Windows.
+
 
 #### 2. Chat Mode (`chat`)
 The client interacts with the running server to generate DAGs.

@@ -64,7 +64,7 @@ def git_operations(new_version):
         subprocess.run(["git", "tag", tag_name], check=True)
         
         print(f"\nSUCCESS: Created git tag {tag_name}")
-        print(f"Now push to origin:\n  git push origin main\n  git push origin {tag_name}")
+        print(f"Now push to origin:\n  git push origin master\n  git push origin {tag_name}")
         
     except subprocess.CalledProcessError as e:
         print(f"Error during git operations: {e}")

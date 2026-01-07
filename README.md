@@ -15,7 +15,7 @@ The easiest way to use `airflow-net` is to install it as a standalone tool using
 
 ```bash
 # 1. Install tool
-uv tool install "git+https://github.com/andrea-t94/airflow-net.git@v0.1.20"
+uv tool install "git+https://github.com/andrea-t94/airflow-net.git@v0.2.0"
 
 # 2. Chat with the Agent (Auto-starts server)
 airflow-net chat -i "Create a DAG that runs dbt build every morning at 6am"

@@ -29,7 +29,7 @@ def get_server_cmd(model_path: str, host: str = "0.0.0.0", port: int = 8000,
         "--port", str(port),
         "--n_gpu_layers", str(layers),
         "--n_ctx", str(ctx),
-        "--n_batch", "2048",
+        "--n_batch", "512",
     ]
     if flash_attn:
         cmd.extend(["--flash_attn", "true"])

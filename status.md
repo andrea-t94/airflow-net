@@ -5,7 +5,6 @@ Done
 
 To do
 - deploy sth locally
-- - add small script with doc to run benchmarks to publish serving performances
 - - fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible
 - - update docs research findings and changelog, they will be used for the blog
 - write two blog:
@@ -21,11 +20,17 @@ Next steps
 - - end-to-end evaluation of DAG files
 - - new type of data
 
-- mem bound improvements:
-- - on M1: try MLX, quantised KV cache, not spec decoding (I am already almost at mem bandwidht, having 8 small models is bandwidth consuming, it is beneficial only if draft is really good, but we are talking about very small models here...)
--  deploy GPUs inference: increase workers + vLLM pagedAttention and run a benchmark (TTFT, TPS, cost efficency=) + dedicated GPU quantisazton (AWQ) + LMCache
-- inference repo beautify. Has to be runnable stand alone and I want to write a blog with that (how do I calculate CTX, batch, input output?)
-- quantisation, distillation, pruning?
+- local deployment improvements:
+- - on M1: try MLX
+- - in general: quantised KV cache, not spec decoding (it is beneficial only if draft is really good, but we are talking about very small models here...)
+- - more quantisation, distillation, pruning?
+
+- deployment improvements:
+- - probably make sense to have this as a separate side project were I migrate from local to multiple GPUs
+- - increase workers + vLLM pagedAttention and run a benchmark (TTFT, TPS, cost efficency=)
+- - dedicated GPU quantisazton (AWQ) 
+- - LMCache
+
 
 - fine tuning improvements:
 - - scale single GPU fine tuning with LoRa, Flash-attn2, bigger context and more data (add new skills) -> I can also use bigger model. ATM it take 30/40 min
@@ -44,14 +49,3 @@ data imrpovements:
 model improvements:
 - e.g. performance with different code compelxity -> might need better model
 - add better dag file parser that can become a tool
-
-
-Dag miner overview
-- it mines github official repo since it has lots of example for all the versions
-- check python file correctness with ast and compile
-- out of scope airflow compiler or unit test(too complicated, it has to be worth it)
-- it (only) checks if there are internal import with simle euristics
-- it adds metadata for analyse SML performance later on
-
-
-Open points

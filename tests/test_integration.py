@@ -5,6 +5,7 @@ import requests
 import ast
 import os
 import signal
+import json
 from pathlib import Path
 
 # Constants
@@ -35,20 +36,23 @@ def clean_server_state():
 
 def test_serve_starts():
     """Test that 'airflow-net serve --detach' starts a responsive server."""
-    # Start server
-    cmd = ["airflow-net", "serve", "--detach", "--cpu"] # Use CPU for CI/test compatibility
-    subprocess.run(cmd, check=True)
-    
-    # Poll for startup
-    start_time = time.time()
-    server_up = False
-    while time.time() - start_time < MODEL_TIMEOUT:
-        if is_server_running():
-            server_up = True
-            break
-        time.sleep(2)
+    try:
+        # Start server
+        cmd = ["airflow-net", "serve", "--detach", "--cpu"] # Use CPU for CI/test compatibility
+        subprocess.run(cmd, check=True)
         
-    assert server_up, "Server failed to start within timeout"
+        # Poll for startup
+        start_time = time.time()
+        server_up = False
+        while time.time() - start_time < MODEL_TIMEOUT:
+            if is_server_running():
+                server_up = True
+                break
+            time.sleep(2)
+            
+        assert server_up, "Server failed to start within timeout"
+    finally:
+        kill_server()
 
 def test_chat_autostart():
     """Test that 'airflow-net chat' auto-starts the server if missing."""
@@ -93,31 +97,129 @@ def test_chat_generation(tmp_path):
     except SyntaxError:
         pytest.fail("Generated DAG code is not valid Python syntax")
 
-def test_mcp_autostart():
-    """Test that MCP server setup logic (which shares code with chat) triggers backend start."""
-    # We can't easily run the full MCP interactive loop, but we can verify the trigger.
-    # We'll use a python script that imports the same logic to test 'ensure_server_running' 
-    # or just run `airflow-net mcp` and kill it after a few seconds, then check server.
+
+
+def test_mcp_dag_generation():
+    """Test that the MCP server correctly handles a DAG generation request via JSON-RPC."""
     
+    # 1. Start the MCP server process
     proc = subprocess.Popen(
-        ["airflow-net", "mcp"], 
-        stdout=subprocess.PIPE, 
+        ["airflow-net", "mcp"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
+        bufsize=0 # Unbuffered for reliable IPC
     )
     
-    # Wait for a bit (enough for server check/start logic to trigger)
-    # The MCP command waits for server health check before printing "MCP Server is up"
-    start_time = time.time()
-    server_started = False
-    
     try:
-        while time.time() - start_time < MODEL_TIMEOUT:
-            if is_server_running():
-                server_started = True
-                break
-            time.sleep(2)
+        # Helper to read a single JSON-RPC line
+        def read_json_response():
+            start_wait = time.time()
+            while time.time() - start_wait < 10: # 10s timeout for responses
+                line = proc.stdout.readline()
+                if line:
+                    try:
+                        return json.loads(line)
+                    except json.JSONDecodeError:
+                        continue # Ignore logging/noise lines
+                if proc.poll() is not None:
+                     raise RuntimeError(f"MCP server exited prematurely. Stderr: {proc.stderr.read()}")
+                time.sleep(0.1)
+            raise TimeoutError("Timed out waiting for JSON-RPC response")
+
+        # 2. Handshake: Initialize
+        init_req = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05", # Use a recent date-based version
+                "capabilities": {},
+                "clientInfo": {"name": "test-client", "version": "0.1.0"}
+            }
+        }
+        proc.stdin.write(json.dumps(init_req) + "\n")
+        proc.stdin.flush()
+        
+        # Read Init Response
+        init_resp = read_json_response()
+        assert "result" in init_resp, f"Failed handshake: {init_resp}"
+        
+        # 3. Handshake: Initialized Notification
+        initialized_note = {
+             "jsonrpc": "2.0",
+             "method": "notifications/initialized"
+        }
+        proc.stdin.write(json.dumps(initialized_note) + "\n")
+        proc.stdin.flush()
+        
+        # 4. Tool Call
+        # We need a long timeout because this triggers model loading + generation
+        tool_req = {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "generate_airflow_dag",
+                "arguments": {
+                    "instruction": "create a simple dag that prints hello world",
+                    "airflow_version": "2.9.0"
+                }
+            }
+        }
+        proc.stdin.write(json.dumps(tool_req) + "\n")
+        proc.stdin.flush()
+        
+        # 5. Read Tool Response
+        # We might have to loop over potential progress notifications or other chatter
+        # But FastMCP usually just replies.
+        start_wait = time.time()
+        tool_resp = None
+        
+        while time.time() - start_wait < MODEL_TIMEOUT:
+            line = proc.stdout.readline()
+            if not line:
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.1)
+                continue
+                
+            try:
+                msg = json.loads(line)
+                # Look for our ID
+                if msg.get("id") == 2:
+                    tool_resp = msg
+                    break
+            except:
+                pass # Ignore non-json
+                
+        assert tool_resp is not None, "Did not receive tool response within timeout"
+        assert "result" in tool_resp, f"Tool call failed: {tool_resp}"
+        assert not tool_resp.get("error"), f"Tool returned error: {tool_resp.get('error')}"
+        
+        content_items = tool_resp["result"].get("content", [])
+        assert len(content_items) > 0
+        text_content = next((c["text"] for c in content_items if c["type"] == "text"), "")
+        
+        # 1. Check syntax validity
+        try:
+            ast.parse(text_content)
+        except SyntaxError:
+            pytest.fail("Generated DAG code is not valid Python syntax")
+
+        # 2. Check content (Classic or TaskFlow)
+        has_classic_dag = "from airflow import DAG" in text_content or "from airflow.models.dag import DAG" in text_content
+        has_taskflow_dag = "from airflow.decorators import dag" in text_content
+        
+        # We also check for 'Validation Status: PASS' which implies the internal validator passed
+        validation_passed = "Validation Status: PASS" in tool_resp["result"].get("content", [{}])[0].get("text", "")
+
+        assert has_classic_dag or has_taskflow_dag or validation_passed, f"Generated code does not look like a DAG:\n{text_content}"
+        
     finally:
         proc.terminate()
-        
-    assert server_started, "MCP command failed to trigger server auto-start"
+        try:
+            proc.wait(timeout=2)
+        except:
+            proc.kill()

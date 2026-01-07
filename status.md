@@ -5,9 +5,9 @@ Done
 
 To do
 - deploy sth locally
-- - add test suite, CI/CD and package first version (e.g. cli/mcp start, generate a valid dag, mcp doesn't give timeout error when dag is re-generated, logs are sent about regeneration)
 - - add small script with doc to run benchmarks to publish serving performances
-- fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible
+- - fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible
+- - update docs and research findings, they will be used for the blog
 - write two blog:
      1. modelling (objective is local to mimic llm, find data, fine tune and eval) + next steps
      2. deploying (system designed, how llama.cpp inference works and local performances evaluation) + next steps

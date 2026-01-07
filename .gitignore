@@ -4,3 +4,7 @@ __pycache__
 venv
 .DS_Store
 .vscode
+.pytest_cache
+.venv
+dist/
+*.egg-info/

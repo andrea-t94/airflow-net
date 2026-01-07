@@ -15,7 +15,7 @@ The easiest way to use `airflow-net` is to install it as a standalone tool using
 
 ```bash
 # 1. Install tool
-uv tool install .
+uv tool install "git+https://github.com/andrea-t94/airflow-net.git@v0.1.18"
 
 # 2. Chat with the Agent (Auto-starts server)
 airflow-net chat -i "Create a DAG that runs dbt build every morning at 6am"
@@ -134,14 +134,16 @@ If you want to contribute or run research scripts:
 │   ├── agent.py          # Core Agent Logic
 │   ├── cli.py            # CLI Implementation
 │   ├── engine.py         # Inference Engine
-│   └── server_manager.py # Server Lifecycle Management
+│   └── tests/            # Integration Tests
 ├── research/             # Research & Training Pipeline
 │   ├── data/             # Dataset Generation Scripts
 │   ├── finetuning/       # Training Notebooks
-│   └── artifacts/        # Model Artifacts
-├── docs/                 # Documentation
-└── pyproject.toml        # Project Dependencies
+└── scripts/              # Maintenance Scripts (e.g., release.py)
 ```
+
+### Development
+If you want to contribute, please check out our [Contribution Guidelines](CONTRIBUTING.md).
+
 
 ### Architecture & Internals
 

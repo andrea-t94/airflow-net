@@ -1,50 +1,13 @@
 # AirflowNet
-** The First Small Language Model (SML) Specialized for Apache Airflow**
+**The First Small Language Model (SML) Specialized for Apache Airflow**
 
-AirflowNet is a research project dedicated to creating lightweight, specialized AI models capable of generating high-quality Apache Airflow DAGs. By fine-tuning efficient base models (like Qwen 2.5 1.5B) on a rigorously curated dataset, we aim to bring intelligent automation to data engineering workflows, running locally on consumer hardware.
+AirflowNet is a research project dedicated to creating lightweight, specialized AI models capable of generating high-quality Apache Airflow DAGs. By fine-tuning efficient base models (Qwen 2.5 coder 1.5B) on a curated dataset, we aim to bring automation to data engineering workflows, running locally on consumer hardware.
 
----
-
-## 🚀 Key Features
-
-### 🧠 Specialized SML
--   **Model**: Fine-tuned **Qwen 2.5 1.5B Instruct**.
--   **Capabilities**: Generates syntactically correct, modern Airflow DAGs from natural language prompts.
--   **Efficiency**: Optimized for local inference (e.g., Mac M1/M2) using 4-bit quantization.
-
-### 💎 Validated Data Pipeline
--   **Mining**: Extracts real-world usage patterns from thousands of heavily filtered DAGs.
--   **Synthetic Instructions**: Uses Claude 3.5 Sonnet (Batch API) to generate high-quality user intents.
--   **Result**: The `airflow-dag-dataset`, a gold-standard corpus for training code models.
-
-### 🔌 Ecosystem Integration (WIP)
--   **MCP Server**: A Model Context Protocol server to provide LLMs with semantic search capabilities over the official Airflow codebase.
--   **CLI**: Unified `airflow-net` command for serving and inference.
 
 ---
 
-## 📊 Project Status
 
-| Component | Status | Notes |
-| :--- | :--- | :--- |
-| **Dataset Creation** | ✅ **Completed** | Mined, filtered, and synthetically augmented. |
-| **Fine-tuning** | ✅ **Research Complete** | Model trained & validated (see [Research Summary](docs/research_summary.md)). |
-| **Inference Engine** | 🚧 **In Beta** | Python `llama.cpp` server for high-throughput local serving. |
-| **MCP Server** | 🚧 **In Development** | Indexing Airflow docs/code for RAG. |
-| **VS Code Extension** | 📅 **Planned** | For seamless in-editor generation. |
-
----
-
-## 📚 Documentation
-
--   [**01. Research Process**](docs/01_research_process.md): Deep dive into our findings, technical details on fine-tuning, and lessons learned.
--   [**02. Evaluation Methodology**](docs/02_evaluation_methodology.md): Structural and semantic evaluation criteria.
--   [**03. Inference & Benchmarks**](docs/03_inference_benchmarks.md): Hardware setup, attempts, and final performance numbers.
--   [**Changelog**](changelog.md): Track the evolution of the project.
-
----
-
-## 🛠️ Usage
+## Usage
 
 ### Quick Start (Recommended)
 
@@ -125,9 +88,71 @@ airflow-net chat -i "Create a DAG..." --airflow-version 2.10.0
 airflow-net chat -i "Create a DAG for data ingestion" -o my_dag.py
 ```
 
-### Development Installation
+#### 3. MCP Mode (Claude / Cursor)
+
+Airflow-Net implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io), allowing you to use your local specialized model as a tool inside AI assistants like **Claude Desktop**, **Claude Code**, or **Cursor**.
+
+##### 1. Claude Code (CLI)
+Create a `.mcp.json` file in your project root:
+```json
+{
+  "mcpServers": {
+    "airflow-net": {
+      "command": "airflow-net",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+Then restart Claude Code (`claude restart` or just run `claude`). It will now have access to the `generate_airflow_dag` tool.
+
+##### 2. Cursor
+1. Go to **Settings** > **Features** > **MCP**.
+2. Add a new server:
+   - **Name**: `airflow-net`
+   - **Type**: `stdio`
+   - **Command**: `airflow-net mcp`
+
+##### Usage
+Once connected, you can simply ask your assistant:
+> "Generate an Airflow DAG that fetches Bitcoin prices every hour."
+
+The assistant will delegate the task to your local Airflow-Net model (auto-starting the inference server if needed) and return the validated code.
+
+
+---
+
+## Development
 
 If you want to contribute or run research scripts:
+
+### Project Structure
+
+```bash
+.
+├── src/airflow_net/      # Application Source
+│   ├── agent.py          # Core Agent Logic
+│   ├── cli.py            # CLI Implementation
+│   ├── engine.py         # Inference Engine
+│   └── server_manager.py # Server Lifecycle Management
+├── research/             # Research & Training Pipeline
+│   ├── data/             # Dataset Generation Scripts
+│   ├── finetuning/       # Training Notebooks
+│   └── artifacts/        # Model Artifacts
+├── docs/                 # Documentation
+└── pyproject.toml        # Project Dependencies
+```
+
+### Architecture & Internals
+
+Airflow-Net behaves like a local client-server application:
+
+1.  **The Database (Model)**: We use a GGUF quantized model (Qwen 2.5 derivative) powered by `llama.cpp`.
+2.  **The Server (`server_manager.py`)**: Wraps `llama-cpp-python.server`. It exposes an OpenAI-compatible API at `http://localhost:8000/v1`.
+    *   **Auto-Start**: The `chat` and `mcp` commands verify if the server is running. If not, they automatically spawn a background process using `server_manager.ensure_server_running()`.
+3.  **The Engine (`engine.py`)**: Connects to the server API to send generation requests. It handles prompt formatting and code extraction.
+
+### Installation
 
 #### 1. Setup Virtual Environment
 ```bash
@@ -152,90 +177,15 @@ uv pip install -e .
 uv pip install -e ".[research]"
 ```
 
-## 🤖 MCP Server (Claude / Cursor)
+### Research Pipeline
 
-Airflow-Net implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io), allowing you to use your local specialized model as a tool inside AI assistants like **Claude Desktop**, **Claude Code**, or **Cursor**.
+If you want to recreate the dataset or run the research pipeline (mining, generating instructions, fine-tuning), please refer to the [Research Documentation](research/README.md). A `Makefile` is provided in the `research/` directory to orchestrate these steps.
 
-### 1. Claude Code (CLI)
-Create a `.mcp.json` file in your project root:
-```json
-{
-  "mcpServers": {
-    "airflow-net": {
-      "command": "airflow-net",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-Then restart Claude Code (`claude restart` or just run `claude`). It will now have access to the `generate_airflow_dag` tool.
 
-### 2. Cursor
-1. Go to **Settings** > **Features** > **MCP**.
-2. Add a new server:
-   - **Name**: `airflow-net`
-   - **Type**: `stdio`
-   - **Command**: `airflow-net mcp`
+## Documentation
 
-### Usage
-Once connected, you can simply ask your assistant:
-> "Generate an Airflow DAG that fetches Bitcoin prices every hour."
+-   [**01. Research Process**](docs/01_research_process.md): Deep dive into our findings, technical details on fine-tuning, and lessons learned.
+-   [**02. Evaluation Methodology**](docs/02_evaluation_methodology.md): Structural and semantic evaluation criteria.
+-   [**03. Inference & Benchmarks**](docs/03_inference_benchmarks.md): Hardware setup, attempts, and final performance numbers.
 
-The assistant will delegate the task to your local Airflow-Net model (auto-starting the inference server if needed) and return the validated code.
-
-### Research Pipeline (For Dataset Creation)
-
-If you want to recreate the dataset or run the research pipeline:
-
-#### 1. Mine DAGs from Airflow Repository
-```bash
-# Test mode (2 versions, quick validation)
-python -m research.data.scripts.01_mine_dags --test
-
-# Full mode (all versions from config)
-python -m research.data.scripts.01_mine_dags
-
-# Custom versions
-python -m research.data.scripts.01_mine_dags --versions 3.0.0 3.0.1
-```
-
-#### 2. Generate Instructions with Claude Batch API
-```bash
-# Test mode (5 DAGs)
-python -m research.data.scripts.02_gen_instruct --test
-
-# Full mode
-python -m research.data.scripts.02_gen_instruct
-```
-
-**Note:** All research scripts must be run as modules using the `-m` flag from the project root directory. This ensures proper Python package resolution.
-
-### Research Notebooks
-
-The project includes Jupyter notebooks for data analysis, fine-tuning, and evaluation:
-
-#### For Google Colab (Fine-tuning)
-Fine-tuning notebooks are designed for Google Colab with GPU support:
-- `research/finetuning/notebooks/01_finetune.ipynb` - Model fine-tuning
-- `research/finetuning/notebooks/02_generate_test_samples.ipynb` - Inference on test set
-
-These notebooks include installation cells and will set up all dependencies automatically.
-
-#### For Local Use (Analysis & Evaluation)
-Some notebooks are designed for local execution:
-- `research/data/analyse_tokens.ipynb` - Token distribution analysis
-- `research/finetuning/notebooks/03_evaluate_generated_dags.ipynb` - DAG evaluation
-
-**Local Setup:**
-```bash
-# Install with research dependencies
-pip install -e ".[research]"
-
-# Install Jupyter if not already available
-pip install jupyter
-
-# Launch Jupyter and ensure you select the venv kernel
-jupyter notebook
-```
-
-**Important:** When running notebooks locally, make sure to select the correct Python kernel (the one from your virtual environment) in Jupyter/VSCode to ensure all imports work correctly.
+---

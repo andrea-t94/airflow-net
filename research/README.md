@@ -35,7 +35,81 @@ We developed a robust "Judge" evaluation pipeline:
 - **Training**: Feasible on free-tier Colab (T4) for 1.5B models using Unsloth/QLoRA.
 - **Inference**: High-throughput batch inference achievable on consumer hardware (e.g., Mac M1/M2/M3) using `llama.cpp` server with continuous batching.
 
-## Getting Started
+## Reproducing the Research
 
-1. **Data Generation**: Go to `research/data` to mine and create your own dataset.
-2. **Fine-tuning**: Go to `research/finetuning` to train your model using the generated data.
+If you want to recreate the dataset or run the research pipeline, follow these steps.
+
+### 1. Research Pipeline (Dataset Creation)
+
+We provide a `Makefile` to simplify running the pipeline steps.
+
+#### Using Make (Recommended)
+Run these commands from the `research/` directory:
+```bash
+cd research
+
+# Run full pipeline (Mine -> Generate -> Dataset)
+make pipeline
+
+# or run in test mode (faster)
+make test-pipeline
+
+# Run individual steps
+make mine
+make generate
+```
+
+#### Manual Execution
+
+##### Mine DAGs from Airflow Repository
+```bash
+# Test mode (2 versions, quick validation)
+python -m research.data.scripts.01_mine_dags --test
+
+# Full mode (all versions from config)
+python -m research.data.scripts.01_mine_dags
+
+# Custom versions
+python -m research.data.scripts.01_mine_dags --versions 3.0.0 3.0.1
+```
+
+#### Generate Instructions with Claude Batch API
+```bash
+# Test mode (5 DAGs)
+python -m research.data.scripts.02_gen_instruct --test
+
+# Full mode
+python -m research.data.scripts.02_gen_instruct
+```
+
+**Note:** All research scripts must be run as modules using the `-m` flag from the project root directory. This ensures proper Python package resolution.
+
+### 2. Research Notebooks
+
+The project includes Jupyter notebooks for data analysis, fine-tuning, and evaluation:
+
+#### For Google Colab (Fine-tuning)
+Fine-tuning notebooks are designed for Google Colab with GPU support:
+- `research/finetuning/notebooks/01_finetune.ipynb` - Model fine-tuning
+- `research/finetuning/notebooks/02_generate_test_samples.ipynb` - Inference on test set
+
+These notebooks include installation cells and will set up all dependencies automatically.
+
+#### For Local Use (Analysis & Evaluation)
+Some notebooks are designed for local execution:
+- `research/data/analyse_tokens.ipynb` - Token distribution analysis
+- `research/finetuning/notebooks/03_evaluate_generated_dags.ipynb` - DAG evaluation
+
+**Local Setup:**
+```bash
+# Install with research dependencies
+pip install -e ".[research]"
+
+# Install Jupyter if not already available
+pip install jupyter
+
+# Launch Jupyter and ensure you select the venv kernel
+jupyter notebook
+```
+
+**Important:** When running notebooks locally, make sure to select the correct Python kernel (the one from your virtual environment) in Jupyter/VSCode to ensure all imports work correctly.

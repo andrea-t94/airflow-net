@@ -370,38 +370,6 @@ class DAGValidator:
 
         return errors
     
-    def validate_directory(self, directory: Path, recursive: bool = True) -> List[ValidationError]:
-        """Validate all DAG files in a directory"""
-        pattern = "**/*.py" if recursive else "*.py"
-        
-        for file_path in directory.glob(pattern):
-            # Skip __pycache__ and test files
-            if '__pycache__' in str(file_path) or file_path.name.startswith('test_'):
-                continue
-            
-            self.validate_file(file_path)
-        
-        return self.errors
-    
-    def print_report(self):
-        """Print validation report"""
-        if not self.errors:
-            print("SUCCESS: All DAG files validated successfully!")
-            return True
-        
-        print(f"ERROR: Found {len(self.errors)} validation error(s):\n")
-        
-        # Group errors by type
-        errors_by_type = defaultdict(list)
-        for error in self.errors:
-            errors_by_type[error.error_type].append(error)
-        
-        for error_type, errors in sorted(errors_by_type.items()):
-            print(f"\n{error_type} ({len(errors)}):")
-            print("-" * 80)
-            for error in errors:
-                print(f"  {error}")
-        
-        return False
+
 
 

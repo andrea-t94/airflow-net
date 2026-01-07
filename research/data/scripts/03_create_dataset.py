@@ -48,7 +48,7 @@ def main():
     
     # 1. Ensure Magpie Data
     print(f"\n[1/5] Checking Magpie data...")
-    magpie_count = magpie.fetch_magpie_data(
+    magpie.fetch_magpie_data(
         dataset_name=config['magpie']['source_dataset'],
         output_path=magpie_output_path,
         buffer_size=config['magpie']['buffer_size'],
@@ -123,8 +123,7 @@ def main():
     # Count specific sources in splits for card stats
     # Simpler: just use total counts of raw loads assuming roughly equal distribution or re-count
     # Let's count properly
-    def count_source(ds, src):
-        return sum(1 for x in ds if x['source'] == src)
+
 
     af_count = len(airflow_dataset) # Total airflow
     mp_count = len(magpie_dataset)  # Total magpie

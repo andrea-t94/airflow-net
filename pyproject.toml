@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "airflow-net"
-version = "0.1.18"
+version = "0.1.19"
 description = "Reasoning agent for generating and validating Airflow DAGs"
 readme = "README.md"
 license = {text = "MIT"}

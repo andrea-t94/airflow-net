@@ -7,7 +7,7 @@ To do
 - deploy sth locally
 - - add small script with doc to run benchmarks to publish serving performances
 - - fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible
-- - update docs and research findings, they will be used for the blog
+- - update docs research findings and changelog, they will be used for the blog
 - write two blog:
      1. modelling (objective is local to mimic llm, find data, fine tune and eval) + next steps
      2. deploying (system designed, how llama.cpp inference works and local performances evaluation) + next steps

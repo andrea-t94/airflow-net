@@ -4,7 +4,7 @@ This document summarizes the research conducted to fine-tune a Small Language Mo
 
 ## 1. Research Conducted & Findings
 
-The goal of this research was to determine if a specialized SML (specifically **Qwen 2.5 1.5B Instruct**) could be fine-tuned to generate high-quality, valid Airflow DAGs from natural language instructions, running efficiently on consumer hardware (Mac M1/M2).
+The goal of this research was to determine if a specialized SML (specifically **Qwen/Qwen2.5-Coder-1.5B-Instruct**) could be fine-tuned to generate high-quality, valid Airflow DAGs from natural language instructions, running efficiently on consumer hardware (Mac M1/M2).
 
 ### The Data Pipeline
 We established a robust three-stage data pipeline:

@@ -7,6 +7,7 @@ To do
 - deploy sth locally
 - - fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible
 - - update docs research findings and changelog, they will be used for the blog
+- - improve model and dataset cards
 - write two blog:
      1. modelling (objective is local to mimic llm, find data, fine tune and eval) + next steps
      2. deploying (system designed, how llama.cpp inference works and local performances evaluation) + next steps
@@ -20,13 +21,14 @@ Next steps
 - - end-to-end evaluation of DAG files
 - - new type of data
 
-- local deployment improvements:
-- - on M1: try MLX
+- local deployment/inference improvements:
+- - on M1: try MLX vs llama.cpp
+- - imrpove batch inference with unslot: FA2? does Lora adapter make inference slower?
 - - in general: quantised KV cache, not spec decoding (it is beneficial only if draft is really good, but we are talking about very small models here...)
-- - more quantisation, distillation, pruning?
+- - more quantisation, distillation, pruning: e.g deploy and test q2, or advanced methods
 
 - deployment improvements:
-- - probably make sense to have this as a separate side project were I migrate from local to multiple GPUs
+- - probably make sense to have this as a separate side project were I migrate from local to multiple GPUs and try to improve inference with multiple requests diving with different techniques
 - - increase workers + vLLM pagedAttention and run a benchmark (TTFT, TPS, cost efficency=)
 - - dedicated GPU quantisazton (AWQ) 
 - - LMCache

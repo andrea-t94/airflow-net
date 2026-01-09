@@ -123,8 +123,7 @@ The assistant will delegate the task to your local Airflow-Net model (auto-start
 ---
 
 ## Development
-
-If you want to contribute or run research scripts:
+If you want to contribute, please check out our [Contribution Guidelines](CONTRIBUTING.md).
 
 ### Project Structure
 
@@ -141,10 +140,6 @@ If you want to contribute or run research scripts:
 └── scripts/              # Maintenance Scripts (e.g., release.py)
 ```
 
-### Development
-If you want to contribute, please check out our [Contribution Guidelines](CONTRIBUTING.md).
-
-
 ### Architecture & Internals
 
 Airflow-Net behaves like a local client-server application:
@@ -156,33 +151,22 @@ Airflow-Net behaves like a local client-server application:
 
 ### Installation
 
-#### 1. Setup Virtual Environment
-```bash
-# Using uv (fastest)
-uv venv
-source .venv/bin/activate
+#### 1. Setup & Install
+Since we use `uv` for dependency management, the setup is a single command:
 
-# OR using standard python
-python3 -m venv .venv
-source .venv/bin/activate
+```bash
+# Creates .venv and installs dependencies
+uv sync
 ```
 
-#### 2. Install Dependencies
-
-**For Core dev:**
+#### 2. Activate Environment
 ```bash
-uv pip install -e .
-```
-
-**For Research (Mining/Training):**
-```bash
-uv pip install -e ".[research]"
+source .venv/bin/activate
 ```
 
 ### Research Pipeline
 
-If you want to recreate the dataset or run the research pipeline (mining, generating instructions, fine-tuning), please refer to the [Research Documentation](research/README.md). A `Makefile` is provided in the `research/` directory to orchestrate these steps.
-
+If you want to recreate the dataset or run the research pipeline (mining, generating instructions, fine-tuning), please refer to the [Research Documentation](research/README.md).
 
 ## Documentation
 

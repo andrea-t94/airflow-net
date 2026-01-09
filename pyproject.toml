@@ -30,7 +30,9 @@ research = [
     "torch>=2.0.0",
     "transformers>=4.35.0",
     "matplotlib",
-    "seaborn"
+    "seaborn",
+    "ipykernel",
+    "jupyter"
 ]
 dev = [
     "pytest"
@@ -40,4 +42,4 @@ dev = [
 airflow-net = "airflow_net.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/airflow_net"]
+packages = ["src/airflow_net", "research"]

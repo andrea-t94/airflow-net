@@ -13,13 +13,11 @@ This document details the technical architecture for serving the AirflowNet mode
 
 ### Attempt 1: Hugging Face Transformers
 We initially tried standard Python inference using `transformers` and `bitsandbytes`.
-*   **Result**: ❌ **Failure**.
 *   **Performance**: ~0.003 DAGs/sec (20 mins for 4 DAGs).
 *   **Issues**: CPU-bound, quantization failed on non-CUDA hardware, high memory usage.
 
 ### Attempt 2: llama.cpp (The Winner)
 We switched to `llama.cpp` using the Python bindings (`llama-cpp-python`) with a Metal backend.
-*   **Result**: ✅ **Success**.
 *   **Speedup**: **170-330x faster** than baseline.
 *   **Efficiency**: 4-bit quantization reduced memory by 60%.
 *   **Throughput**: Up to ~186 tokens/sec (t/s) with parallel decoding.
@@ -41,6 +39,10 @@ We tested scaling from 1 to 8 concurrent workers.
 | **4** | 1,312 | **157.62** | **1.84x** | 46% |
 | **8** | 1,319 | **181.59** | 2.12x | 26% |
 
+**Key Insight**:
+*   Near-linear scaling up to 4 workers.
+*   Diminishing returns at 8 workers due to **GPU compute saturation**, not memory bandwidth. M1 Pro's unified memory bandwidth (200GB/s) is only ~30% utilized; the bottleneck is the sequential nature of autoregressive decoding on the GPU cores.
+
 ### Latest Verification (Single Request - Metal vs CPU)
 We verified the performance impact of context size and compared our `llama.cpp` (Metal) stack against a standard Transformers (CPU) implementation.
 
@@ -57,8 +59,3 @@ We verified the performance impact of context size and compared our `llama.cpp` 
 1.  **Context is Free**: Increasing context from 1.9k (P90) to 4k (PROD) had **zero measurable impact** on generation speed (~64 t/s constant).
 2.  **Linear Scaling**: Total request time scales linearly with output tokens. P99 takes ~1.6x longer than P90 simply because it writes 1.6x more code.
 3.  **Superior Stack**: Our `llama.cpp` + Metal stack is **>15x faster** than standard CPU inference, critical for local usability.
-
-
-**Key Insight**:
-*   Near-linear scaling up to 4 workers.
-*   Diminishing returns at 8 workers due to **GPU compute saturation**, not memory bandwidth. M1 Pro's unified memory bandwidth (200GB/s) is only ~30% utilized; the bottleneck is the sequential nature of autoregressive decoding on the GPU cores.

@@ -4,9 +4,6 @@ Done
 
 
 To do
-- deploy sth locally
-- - fine tune on QWEN CODER!! ANd make BASE MODEL NAME as config var clearly visible
-- - update docs research findings and changelog, they will be used for the blog
 - - improve model and dataset cards
 - write two blog:
      1. modelling (objective is local to mimic llm, find data, fine tune and eval) + next steps

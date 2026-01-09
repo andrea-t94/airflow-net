@@ -1,0 +1,56 @@
+# Project Learnings & Dev Log
+
+1.  Decided to generate **3 instructions per request**. This proved to be really cost effective using batch messages, I spent <$2 (with one request for one instruction at time >$5).
+    1.1 Opted for batch mode since I don't have latency requirements.
+
+2.  Created a **lightweight DAG parser** that checks basic things (e.g. missing import checks, XComs, task groups, connection and task are properly working, Operators and Sensors are properly inputted).
+
+3.  Looking for quantized versions that can work decently on my **Mac M1 Pro**. I noticed that batch has to be extremely low, limited also the output tokens and now looking for a cross platform inference solution that works with cpu -> `llama.cpp` with gguf models.
+
+4.  Using **M1 GPU as backend** for `llama.cpp`, I increased latency of 2.5X, but by offloading multiple models (4 workers) I've increased throughput, halving total generation time.
+
+5.  I am now using python `llama.cpp` server wrapper with `n_batch = n_ctx = 2048`, that should be sufficient to cover prompt + output without cutting it. Client fires in parallel workers (4), same perf of 4., since on server side it's still sequential. 4. should be better because we were putting 4 models though. My take is that continuous batching and optimisations of the server increased latency, while mem bandwidth problems of having 4 models in GPU decreased it for the 4. -> I want to create a script that reports all of those by different methods so that I can write a blogpost.
+
+6.  Huge improvements with **C++ llama server**, with true parallelism. Thanks to continuous batching I can parallelly fill multiple requests to one single model, thus increasing GPU utilization rate while minimizing mem bandwidth (real bottleneck for my simple implementation).
+
+7.  Again huge improvements, testing with `llama-bench` I've seen that we are almost at mem bounded at **182 t/s across 8 workers**. We can do it because ctx size has been tuned on expected DAG dataset. Only one worker we were compute bound, we were not using GPU well.
+
+8.  Run a full data processing at **0.18 DAG/s**. Considering avg DAG token len to be 1500-2000 tokens, this is perfectly in line with 180 t/s.
+
+9.  Fine tuning will be on **Colab + Unsloth** since I did some calculation and, even using MLX on M1, it will take approx 20h for 3 epochs with LoRa. Training is compute bound, with the benchmarks we see that M1 can arrive to 1200 t/s in inference, considering training 3x compute effort we can aim for 300-400 t/s. Assuming 1K tokens per instruction per 7K instructions, we need to gen 7M tokens -> 20h.
+
+10. I am adding distilled instructions from **Qwen 2.5 coder 32B**, using magpie technique.
+
+11. I will finetune on Colab + Unsloth with NVIDIA.
+
+12. Our output distribution is really skewed (from few hundred tokens to thousands) -> this places challenges in both inference (here continuous batching should help, maybe also vLLM) and training (still need to understand).
+
+13. Using a T4 was generating really few t/s (it could have taken 6h to fine tune 3 epochs), I switched to **A100** it will take 30m. `Packaging=True` is very useful for my use case (better than group by length). It is going at 0.2 it/s = 0.2*2048*4 = **2556 t/s**! I am truncating approx 11% of sequences though with 2048 ctx.
+
+14. Using unsloth to save GGUF as well even if it is not efficient. Locally It goes to OOM CPU RAM, since it keeps both og and quant model in RAM. I am ok for now, but can consider an optimisation.
+
+15. Basic fine tuning using standard unsloth advices, except bigger ctx to train on the whole dataset and a bigger than usual quantisation since I am dealing with quant sml for code.
+
+16. From the dry run I can see that our **fine tuned model is way better** because:
+    1.  It knows latest advancements and knows most of the operators (the base uses ancient syntax and hallucinates).
+    2.  But sometimes doesn't understand what has been asked and inject internal methods (like tests).
+    3.  Moreover it misses the setup part which the base model has, which I like.
+    4.  Moreover it expose some apis, they should not exist, but better to put sth like `YOUR_API`.
+
+17. Great results from evaluation! The model is able to generate **8% less invalid DAGs** and in general they are better quality as well, but I need to deep dive on how to evaluate. I need to improve it.
+
+18. Syntax error rate in line with dataset I've fed the model with, so I am happy. I think **Qwen standard** is safer and just provide something safe.
+
+19. The model is useful because it learned airflow syntax, but it learned also internal libraries (e.g. for testing) that made the llm based eval fail to follow instruction, since it used things that cannot really be used. This can be improved by either preprocessing or postprocessing the data and by finding more data.
+
+20. The model performs worse in ast parsing, but this is again coming from also input data that performs poorer compared to baseline model. On top, the code generated by the finetuned version is also more complex. Again also here **input dataset to be improved** (end-to-end testing?) and a slightly bigger model might also handle more complex files. To really understand the 2nd point, we might need to analyse if code complexity plays a role.
+
+21. Started to restructure the repo and cleaning up. Switched back to `llama.cpp` [python] for simplicity ("Library First" philosophy).
+    *   **Pros:** No C++ compilation needed for users, unified `airflow-net serve` CLI, essentially zero perf loss (still runs C++ backend with flash_attn).
+    *   **Cons (Parity Loss):** We lose explicit `n_parallel` slot allocation control. The Python server uses dynamic batching which is easier but less deterministic under varying load than the C++ server's strict slot reservation.
+
+22. From the final evaluation I've noticed several improvements on the data quality: drop data leakage (airflow tests), increase or drop niche libraries, augment to help model generalise (less pythonic and also different numbers, not only 20).
+
+23. Deployed with `llama.cpp` as a cli tool that download any model (default mine fine tuned), apply airflow version and generate a **VALID DAG**. I have scaffolded the MCP server and cleaned up the repo. TBH it could be generalised to be a cli with ANY SML.
+
+24. Fine tuned the deployment using `n_batch=2048` and `ctx=4096` to cover p99 cases of prompt+output. This is coming from the old `run_benchmarks` script that I used to measure serving results that where finetuned with 8 workers.

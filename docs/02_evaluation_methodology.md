@@ -22,24 +22,28 @@ We track the **Validity Rate (%)**: The percentage of generated samples that pas
 
 ---
 
-## 2. Semantic Evaluation (Qualitative)
+## 2. LLM Evaluation
 
-Structural validity doesn't guarantee the code does what the user asked. For this, we use an **LLM-as-a-Judge** approach (specifically **Claude 3.5 Sonnet** via Batch API) to score the quality of the valid DAGs.
+Structural validity doesn't guarantee the code does what the user asked. For this, we use an **LLM-as-a-Judge** approach (specifically **Claude 4.5 Sonnet** via Batch API) to score the quality of the valid DAGs.
 
-### Scoring Criteria (1-5 Scale)
-The model functions as an expert Airflow Reviewer, grading on:
+### Scoring Criteria (0/1 Scale)
+The model functions as an expert Airflow Reviewer, grading on three binary criteria:
 
-#### 🎯 Correctness
-*   Does the code logic match the user's natural language request?
-*   Are the cron schedules, task types, and specific parameters correct?
+#### 1. Idiomatic Airflow
+*   **Pass (1)**: Uses specific Providers and Operators designed for the task.
+    *   *Example:* `from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator`
+*   **Fail (0)**: Relies on generic "Pythonic" patterns where it wraps logic in a `PythonOperator` + Hook instead of using the native Operator.
 
-#### 📦 Completeness
-*   Are all necessary imports present?
-*   Are there missing arguments or undefined variables?
+#### 2. No Hallucination/Leakage
+*   **Pass (1)**: Code is clean, production-ready, and uses only standard Airflow libraries.
+*   **Fail (0)**: Code exhibits any of the following:
+    *   Imports internal testing modules or test harness boilerplate (e.g., `from tests_common.test_utils.system_tests import get_test_run`).
+    *   Hallucinates non-existent modules, operators, or API methods (e.g., `GoogleCampaignManagerBatchInsertOperator`).
+    *   Uses parameters that do not exist for the specified operator.
 
-#### ✨ Best Practices
-*   Does it use modern Airflow operators (e.g., `BashOperator` vs deprecated patterns)?
-*   Is the code pythonic and clean?
+#### 3. Instruction Adherence
+*   **Pass (1)**: Fulfills the specific business logic requested (e.g., "load data AND validate").
+*   **Fail (0)**: Misses a key step of the instruction.
 
 ---
 
@@ -47,7 +51,7 @@ The model functions as an expert Airflow Reviewer, grading on:
 
 Evaluations are centralized in the research notebook pipeline.
 
-**Location**: [`research/finetuning/notebooks/03_evaluate_generated_dags.ipynb`](../research/finetuning/notebooks/03_evaluate_generated_dags.ipynb)
+**Location**: [`research/finetuning/notebooks/03_model_evaluation.ipynb`](../research/finetuning/notebooks/03_model_evaluation.ipynb)
 
 ### Workflow
 1.  **Input**: The notebook reads JSONL inference results (containing generated code) from `research/artifacts/finetuning/01_inference_results`.

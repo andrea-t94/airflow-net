@@ -56,28 +56,34 @@ I'll propose solutions to overcome them, highlighting the iterative process of m
 
 
 ## 2. Deployment
-Here the objective is instead to highight the engineering side, which instead is pretty much difference. In fact, wheter locally or in cloud, the inference process is different compared to the training phase, which is something new on the ML landscape. The fact that there are specific trick to speed up inference (e.g. KV cache, paged attention) and that there are specific tools to deploy the model (e.g. vLLM, LLM Cache) are something new on the ML landscape.
+Here the objective is instead to highight the engineering effort on the inference side.
+In fact, wheter locally or in cloud, the inference process is different compared to the training phase, which is something new on the ML landscape. The fact that there are specific trick to speed up inference (e.g. KV cache, paged attention etc.) and that there are specific tools to deploy the model (e.g. vLLM, LLM Cache) are something new on the ML landscape.
 
 ### 2.1 Objective
+I want to share how inference works and why it needs ad hoc solution. I also want to show what are the most common tools and techniques to deploy an LLM locally. 
+Finally I want to show how I optimised my local inference and what are the 2 ways to deploy it (as a "choatbot" via CLI or as a tool via MCP server).
 
-### 2.2 Model Inference Engine (The Foundation)
-#### 2.2.1 Why inference is different (KV Cache, PagedAttention)
-#### 2.2.2 The Local Stack: Deep dive on llama.cpp (GGUF, Quantization internals)
-#### 2.2.3 Benchmarks: Native (llama.cpp) vs Python (HF+bitsandbytes)
+### 2.2 Model Inference Engine
+#### 2.2.1 Why inference is different 
+#### 2.2.2 What are the most common techniques to improve inference performance
+#### 2.2.3 The Local Stack: Deep dive on llama.cpp (GGUF, Quantization internals, KVCache, FlashAttn)
+#### 2.2.4 Benchmarks: Native (llama.cpp) vs Python (HF+bitsandbytes)
 * Metric 1: Tokens/sec (The obvious one)
 * Metric 2: RAM usage (Critical for local)
 * Metric 3: Model Quality (Did Q4 quantization break the code syntax?)
 * Analysis: Compute vs Memory Bound bottlenecks (Why Mac is bandwidth starved)
+#### 2.2.5 My inference engine
 
-### 2.3 Deployment Architecture 1: The "Unix" Way (CLI)
+### 2.3 Deployment Architecture 1: as a chatbot via CLI
 #### 2.3.1 CLI implementation details
 #### 2.3.2 Use Case: Piping and scripting
 
-### 2.4 Deployment Architecture 2: The "Agentic" Way (MCP Server)
+### 2.4 Deployment Architecture 2: as a tool via MCP server (the agentic way)
 #### 2.4.1 What is MCP and why it matters for IDEs (Cursor/Windsurf)
 #### 2.4.2 Server implementation details
 
 ### 2.5 Potential next steps
+Here I describe potential next steps, both to improve existing solution limits, but also to explore completely new techniques/tools (e.g. vLLM)
 #### 2.5.1 Pushing Local Limits: Deeper Quantization vs MLX (Apple Silicon native)
 #### 2.5.2 Performance Analysis: Finding the theoretical max (Compute/Mem bound)
 #### 2.5.3 Scaling Up: From local CLI to concurrent serving (vLLM)

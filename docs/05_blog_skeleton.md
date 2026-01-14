@@ -1,4 +1,20 @@
 # Blog Skeleton
+
+## MetaData / Strategy: From Toy to Tool
+
+**Blog Series Title**: *From Toy to Tool: The Engineering Reality of Local SLMs*
+
+**The Focus**:
+*   This is **not** a tutorial on "how to run a model".
+*   This **is** a deep dive into the **lifecycle of specialized Small Language Models (SLMs)**.
+*   We treat the SLM not as a magical black box, but as a engineered software component: finetuned for a specific job (Airflow DSL), deployed with specific constraints (Local/Privacy), and integrated into specific workflows (Unix Pipes & Agentic IDEs).
+
+**The Target Audience**:
+*   **The Disenchanted Practitioner**: ML Engineers and Data Pros who are tired of generic "Chat with your PDF" demos and want to see rigorous application of SLMs.
+*   **The Local-First Developer**: Engineers who value privacy, zero-latency, and offline capability, and want to know if local SLMs are actually viable for code generation.
+*   **The Agent Builder**: People looking to build complex systems where low-cost, high-speed local models act as "function routers" or "drafters" for larger cloud models.
+
+---
 The blog will be divided into 3 main parts:
 1. I explain how am I and why I am cool and the overarching objective
 2. I fine tune a model and evaluate it
@@ -96,7 +112,11 @@ I'll also show some of the pitfalls of the current approach:
 4. creating more complex dags, and therefore is more prone to errors
 
 ### 1.7 Conclusion and next steps (whit CTA)
-I'll wrap up the potential improvements on modelling and for training finetuning. Asking also the crowd feedback on what I could improve or what they'd like to see.
+I'll wrap up the potential improvements:
+- the ones highilighted on the section above
+- increase model and dataset size since the models are better with scale
+- with the last option, I can try to improve finetuning engineering (e.g. training on multiple GPUs, stronger or dynamic quantisation etc.).
+Asking also the crowd feedback on what I could improve or what they'd like to see.
 
 
 
@@ -104,32 +124,53 @@ I'll wrap up the potential improvements on modelling and for training finetuning
 ## 2. Deployment
 Here the objective is instead to highight the engineering effort on the inference side.
 In fact, wheter locally or in cloud, the inference process is different compared to the training phase, which is something new on the ML landscape. The fact that there are specific trick to speed up inference (e.g. KV cache, paged attention etc.) and that there are specific tools to deploy the model (e.g. vLLM, LLM Cache) are something new on the ML landscape.
+In this blog I'll dive a bit on how to deploy an LLM locally, building a chatbot CLI and an MCP server utilisable via e.g. Claude code.
+I'll also share the learnings on how I optimised for local inference and which tool I've used.
 
 ### 2.1 Objective
 I want to share how inference works and why it needs ad hoc solution. I also want to show what are the most common tools and techniques to deploy an LLM locally. 
 Finally I want to show how I optimised my local inference and what are the 2 ways to deploy it (as a "choatbot" via CLI or as a tool via MCP server).
 
 ### 2.2 Model Inference Engine
-#### 2.2.1 Why inference is different 
-#### 2.2.2 What are the most common techniques to improve inference performance
-#### 2.2.3 The Local Stack: Deep dive on llama.cpp (GGUF, Quantization internals, KVCache, FlashAttn)
-#### 2.2.4 Benchmarks: Native (llama.cpp) vs Python (HF+bitsandbytes)
+#### 2.2.1 A primer on inference and why it is different from training
+#### 2.2.2 What are the most common techniques to improve inference performance (GGUF, Quantization internals, KVCache, FlashAttn)
+#### 2.2.3 Why I opted for Llama.cpp
+Intro on what is llama.cpp and why it is so fast. Then I show the benchmarks and analysis.
 * Metric 1: Tokens/sec (The obvious one)
 * Metric 2: RAM usage (Critical for local)
 * Metric 3: Model Quality (Did Q4 quantization break the code syntax?)
 * Analysis: Compute vs Memory Bound bottlenecks (Why Mac is bandwidth starved)
-#### 2.2.5 My inference engine
+#### 2.2.4 My inference engine
+I explain why simply running the server isn't enough - we need a "Brain" to control it.
+*   **The Abstraction Layer**: Why I built `engine.py` instead of raw API calls everywhere.
+    *   *Separation of Concerns*: Decoupling the LLM backend from the application logic (CLI/MCP).
+*   **Implementation Details**:
+    *   **Universal Client**: I use the standard `openai` Python SDK to connect to `llama.cpp`.
+        *   *Benefit*: It makes the backend swappable (e.g., to GPT-4 or vLLM) without code changes.
+    *   **Prompt Engineering as Code**: Encapsulating the "Airflow Expert" persona.
+        *   Injecting System Prompts and handling ChatML formatting transparently.
+    *   **Robust Output Parsing**: Solving the "Chatty Model" problem.
+        *   Implementation of `_extract_code` to strip markdown fences and comments, ensuring clean executable Python code.
+    *   **Deterministic Configuration**: Enforcing `temperature=0.1` for reliable code generation.
 
-### 2.3 Deployment Architecture 1: as a chatbot via CLI
-#### 2.3.1 CLI implementation details
-#### 2.3.2 Use Case: Piping and scripting
+### 2.3 Deployment Architecture 1: The CLI (Human-to-Model Interface)
+*   **The Concept**: Treating SLMs as "Unix Utilities".
+    *   Just like `grep` or `awk`, a specialized SLM should be a fast, local tool that does one thing well (in this case, writing Airflow code).
+*   **Why specific to SLMs?**:
+    *   *Zero Latency & Privacy*: No network calls means you can pipe sensitive DAG logic directly into it.
+    *   *Offline Capable*: It becomes a dependable tool in your dev environment, not a service you rent.
+*   **The Architecture**: A thin client wrapper that abstracts the complexity of model loading (GGUF) and prompt formatting, exposing a simple text-in/text-out interface.
 
-### 2.4 Deployment Architecture 2: as a tool via MCP server (the agentic way)
-#### 2.4.1 What is MCP and why it matters for IDEs (Cursor/Windsurf)
-#### 2.4.2 Server implementation details
+### 2.4 Deployment Architecture 2: The MCP Server (Agent-to-Model Interface)
+*   **The Concept**: The "Microservice" for AI Agents.
+    *   Instead of a human chatting with the model, we expose the SLM as a "Tool" for other, smarter models (like Claude in Cursor or Windsurf).
+*   **Why this changes the game for SLMs**:
+    *   *Specialization*: Your general IDE Agent (Claude) doesn't need to know every Airflow edge case. It can delegate that to your fine-tuned expert SLM.
+    *   *Cost Efficiency*: You offload the heavy token generation (writing verbose DAGs) to a free local model, keeping the paid API model as the high-level orchestrator.
+*   **The Architecture**: Implementing the Model Context Protocol (MCP) to standardize how the local model "advertises" its capabilities to the IDE.
 
-### 2.5 Potential next steps (with CTA)
-Here I describe potential next steps, both to improve existing solution limits, but also to explore completely new techniques/tools (e.g. vLLM)
-#### 2.5.1 Pushing Local Limits: Deeper Quantization vs MLX (Apple Silicon native)
-#### 2.5.2 Performance Analysis: Finding the theoretical max (Compute/Mem bound)
-#### 2.5.3 Scaling Up: From local CLI to concurrent serving (vLLM)
+### 2.5 Conclusion and next steps (with CTA)
+I'll wrap up the learning and the next steps
+    1. to improve existing solution (stronger quantisation, using MLX)
+    2. to explore completely new techniques/tools (e.g. I'd like to scale this with concurrent requests, so I'll try vLLM). 
+

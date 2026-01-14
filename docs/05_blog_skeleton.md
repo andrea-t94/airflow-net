@@ -1,57 +1,103 @@
 # Blog Skeleton
-The blog will be divided into 2 main parts:
-1. I explain the overarching objective and fine tune a model and evaluate it
-2. I deploy it locally
+The blog will be divided into 3 main parts:
+1. I explain how am I and why I am cool and the overarching objective
+2. I fine tune a model and evaluate it
+3. I deploy it locally
+
 
 ## 0. Intro
-The overarching objective is to share my learning journey on how to apply LLM/SLM to a real world use case: I'll finetune and deploy an SLM locally (explain my local stack as well). 
+Who am I?
+I am a practitioner coming from classical ML (e.g. differences against classical ML, stack/algorithms for training and inference LLM/SLM). - SHARE SMALL PARTS OF MY JOURNEY USING MY RESUME, -  I've started as analyst from mgmgt engineering and I am now working as a data/ML engineer in one of the biggest eu scaleup, Flix. I've always had big passion for AI since when it was called DL (with some sporadic projects I've worked in).
+I have started not knowing much about ML and data, but I have been learning myself over the years and grew till senior.  
 
-Why?
-1. I want to learn how to apply SLM to a real world use case and I want to share my learnings from a pov of a practictioner coming from classical ML (e.g. differences against classical ML, stack/algorithms for training and inference LLM/SLM)
-2. I believe that in the future SLM will be the standard for many tasks because they can be deployed locally with your personal stack, allowing to build secure applications and spend less money on 3rd party LLMs or infra to deploy an LLM
-3. Literature demonstrates that SLM can outperform or perform in par with LLMs in a number of tasks, but it is still a nascent field and there is no much literature on how to apply it to real world use cases
+Why I am doing this?
+Overarching objective: dive into AI (LLM) and share my pov as a data practictioner coming from "classical" ML
+I think as an experienced data/ML practitioner, knowing more about latest advancement in AI is essential and also fun.
+This is not the first time I am learning something, but this time I want to share my learning journey.
+This first serie of blog posts is about how to apply LLM/SLM to a real world use case: I'll finetune and deploy an SLM locally (explain my local stack as well). 
+Once I've learned enough and I'm familiar the main concepts/methods/tools from an application point of view, I'll move to more advanced and internal topics to increase my understanding and imrpvoe application performances(e.g. build an LLM from scratch, build a attention algorithm from scratch, optimise training/inference by writing custom kernels etc.).
+This is sort of opposite direction of how you learn at university, and more similar to how I learn at work (learnig by doing and when you need).
+
+Why you should read me?
+This is definitely not a begineer friendly blog series, it is/will be meant for people who already have a solid background in ML/data engineering and want to learn more about latest AI advancements in a pragmatic and end-to-end way.
+Most of the content I find online is really theoretical and/or covers a small part of the process, but I want to show you the full picture, from gathering the data till the inner workings of the models and methods around AI, so that we can learn how to apply them at best.
+
+
+
+#### The first series of blog posts will be on applying LLM/SLM to a real world use case.
+Why you should read this?
+I want you to feel less intimidated by applying LLMs to your use cases.
+1. I believe that in the future SLM will be the standard for many tasks because they can be deployed locally with your personal stack, allowing to build secure applications and spend less money on 3rd party LLMs or infra to deploy an LLM. Literature demonstrates that SLM can outperform or perform in par with LLMs in a number of tasks, but it is still a nascent field and there is no much literature on how to apply it to real world use cases end to end (from data collection to deployment).
+2. I want to show you that, most of the process is extremely similar to the classical ML process you, as a data practictioner, already knows.
 
 What?
-I will use build an SLM that can write airflow dags (called AirflowNet). As said at this stage I don't care about the results, I want to show the (iterative) process that I use to create and deploy a model.
+I will finetune an SLM that can write airflow dags (called AirflowNet). As said, at this stage I don't care about the results, I want to show the (iterative) process that I use to create and deploy a model. 
+I plan to show you from a data practictioner coming from the classical background (what does classical mean?). I will show you that, most of the process is extremely similar to the classical ML process. 
 I will talk about some improvements that I plan to do in case I see interest from the community.
 
 How?
-I will blog my learnings as said and I'll open source my code + data.
+I will blog my learnings as said and I'll open source my code + data. The blog will be shared in 2 parts, one per week.
 The code contains both the research code and a working CLI and MCP server that I've built to understand how inference work for LLMs and what are some of the most common ways to deploy them locally.
+I'd be really happy if you will share some feedbacks, questions or suggestions for next series.
 
-## 1. Modelling
-The idea is to showcase that the process of finetuning an SLM locally is similar to standard model development process (from defining the objective to evaluate it, as defined in some books like ml system design).  
-I want to show that the process is not that different from standard model development, apart from the specificities of SLMs (each ML model, not only LLM, has its own specificities).
+
+## 1. Part 1: Fine tune the SLM
+The idea is to showcase that the process of finetuning an SLM locally is similar to standard model development process: from gathering the data to evaluate it, as defined in some books like ml system design.  
+I want to show that the process is not that different from standard model development and, if you are an experienced data practitioner, you should find it familiar.
 
 ### 1.1 Objective
-I want to finetune an SLM to write airflow dags (called AirflowNet).  
-I will basically do LLM knowledge distillation: I will use an LLM to teach the SLM how to write airflow dags, under the assumption that the latest frontier LLMs are really good at writing and evaluating airflow dags (since I am use them for this task).  - add references about that -  
+I want to finetune an SLM to write airflow dags (called AirflowNet). I will use an instruct SLM, since my goal is to fine tune a model good at following instructions.  -  SMALL INTRO ON AIRFLOW - 
+They are ideal for applications like code generation, summarization, Q&A, and automation, where predictable and structured results are needed, unlike base models which are more generalized or chat models focused on conversation. Instruct models excel at understanding intent and delivering direct answers.
+
+I will basically do LLM knowledge distillation: I will use an LLM to help me prep the training dataset (instructions) for the SLM and to evaluate the generated dags.
+Main assumptions/ideas:
+1. latest frontier LLMs are really good at writing and evaluating airflow dags, therefore my goal is to make my SLM be as good as them at airflow dag file generation  - ADD REFERENCES ABOUT THAT, distill labs -  
+2. SLM are proved to perform on par or even better on specific task vs LLMs, that's why I want to show you that it is possible to build a SLM that can write airflow dags
+
 
 ### 1.2 Data Collection
-Since coding is a difficult task, that requires a perfect sintax knowledge, I'll start the dataset with official examples, per different airflow version, directly taken from airflow official github.
+Coding is a difficult task: it requires perfect sintax knowledge of the language, knowledge of the language idiom (ie., airflow) and the ability to follow instructions to generate something working and useful.
+To make sure the SLM is learning to write airflow dags, I'll start the dataset with official examples, per different airflow version, directly taken from airflow official github so that I am sure I am following the airflow way of doing things. 
+Obviously this can be extended to unofficial examples, but with the risk of learning bad practices and would require lot of process to clean the data. 
+To make the model (which I'll talk in the next session) remember also python syntax, I'll also use magpie dataset, which is a dataset of extracted code from Qwen 2.5 Coder (our base model) - ADD REFERENCES ON MAGPIE - 
+Same goes for using the LLM to generate dag files: high risk of model hallucination plus the cost of using an LLM to generate the dataset.
 
 ### 1.3 Data Preprocessing
-The dataset, in chatML format, has been created asking an LLM (in this case I've created a client for Claude API) to generate 3 instructions per dag file collected. The instructions are generated in a way that they are different from each other and from the dag file, but they are still related to it. The augmentation is useful to have more data, since SLM/LLM are data hungry. 
-I'll also clean the file a bit, removing unnecessary comments, otherwise the SLM will learn it as well. 
+The airflow dataset has been created asking an LLM (in this case I've created a client for Claude API) to generate 3 instructions per dag file collected. The instructions are generated in a way that they are slightly different from each other for the same dag file. The augmentation is useful to have more data, since SLM/LLM are data hungry. 
+From 04_project_learning.md: I've decided to generate **3 instructions per request**. This proved to be really cost effective using batch messages (since I don't have latency requirements), I spent <$2 (with one request for one instruction at time >$5).
+I've also cleaned up the dag files, since they were containing lot of comments upfront which I didn't want the model to learn. I didn't instead remove or add internal libraries/imports for time reasons, hoping the model will learn how to cope with that (we'll see later on that is not the case).
+I have made sure to have enough data to train the model, and kept also python related instructions (again from magpie, no instruction generation needed) to avoid catastrophic forgetting. 
+Finally, I've applied the ChatML format, with which Qwen coder 2.5 Instruct is compatible - SHORT PRIMER ON TEMPLATE FORMATS -  
 
 ### 1.4 Model Selection
 I have opted for using Qwen coder 2.5 1.5B Instruct, since it is open source, specialised in coding (which, as said, is more complex that simple writing) and it can fit into my local stack. 
+This blog helped me deciding for qwen: https://huggingface.co/blog/daya-shankar/open-source-llms
+It's one of the best open source LLM family for coding, it's fully open source and they provide a distilled version that fits into my mac.
+Eventhoudh there were some better model in the leaderboard like Deepseek (https://livebench.ai/#/?Reasoning=a&Coding=a&Mathematics=a&Data+Analysis=a&Language=a&IF=a&sort=Coding+Average&openweight=true), I've opted for Qwen 2.5 coder since it was distributing a 1.5B distilled version already in huggingface (https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct)
 
-### 1.5 Model Training
+### 1.5 Model Fine tuning
 I'll dive on how training works for LLM and why it is so expensive. This will help me to justify the choices I make in the following sections (it might also be a unique paragraph without the sub-sections).
-#### 1.5.1 The Compute Stack: Google Colab with GPU A100
-#### 1.5.2 Using Unsloth for 2x faster training (since it rewrites some custom kernels)
-#### 1.5.3 Technique: QLoRA (Low-Rank Adaptation with Quantization)
-#### 1.5.4 Artifacts: Saving Adapters + Merging to GGUF
+#### 1.5.1 A primer on (plain) model training and why it is so expensive
+A small intro on how training works for LLM, highlighting that is expensive (quadratic memory and runtime cost). This is to explain why usage of GPUs is so important.
+Since I don't have my own GPUs, I rely on colab, but feel free to use your own hardware. Since I do have Pro, I opted for A100 to dramatically speed up fine tunning vs free T4 GPUs (explain why it's faster).
+Explain how long it will take only using T4 or A100 GPUs
+#### 1.5.2 Fine tuning optimisation with Unsloth and QLoRA
+Moreover, to speed up the process, I've used Unsloth, which is a library with optimised triton kernels (is in my roadmap to write a blog on it). The second optimisation component is by using PEFT method called LoRA (Low-Rank Adaptation) combined with quantization (QLoRA). Also this is something I'm not going to dive too much. - ADD REFERENCES ON UNLOSTH, QLORA, PEFT - 
+#### 1.5.3 Fine tuning process
+I just show the overall script, without going into details on the code. I'll just highlight if I did anything particular, besides the aformentioned optimisations. It's just plain unsloth script.
 
 ### 1.6 Model Evaluation
-I'll show that the model has learned to write airflow dags with its specific sintax. I'll also show some of the pitfalls of the current approach.
+I've used a custom ast and airflow dag parser (CTA to help me and link of the code) + using LLM as a judge - LINK TO LLM EVALs blog recommended - The LLM as a judge prompt as been fine tuned based on the ground truth data (that should be considered good).
+The model has been evaluated on a set of airflow dags, highlighting that it has learned to write airflow dags with its specific sintax. Compared to the baseline model, it has shown to have learned specific airflow syntax, like operators.
+I'll also show some of the pitfalls of the current approach:
+1. catastrophic forgetting on python syntax -> add python data
+2. hallucination on niche libraries -> filter them out or increase sample size
+3. overfitting on internal libraries (e.g. test libraries) -> filter them out
+4. creating more complex dags, and therefore is more prone to errors
 
-### 1.7 Potential next steps
-I'll propose solutions to overcome them, highlighting the iterative process of model development.
-#### 1.7.1 Fixing Catastrophic Forgetting: Mixing more generic Python data to restore syntax
-#### 1.7.2 Reducing Hallucinations: Better filtering of niche libraries vs "Teacher" LLM generation
-#### 1.7.3 Robustness: Injecting failures to train "Troubleshooting" capability
+### 1.7 Conclusion and next steps (whit CTA)
+I'll wrap up the potential improvements on modelling and for training finetuning. Asking also the crowd feedback on what I could improve or what they'd like to see.
+
 
 
 
@@ -82,7 +128,7 @@ Finally I want to show how I optimised my local inference and what are the 2 way
 #### 2.4.1 What is MCP and why it matters for IDEs (Cursor/Windsurf)
 #### 2.4.2 Server implementation details
 
-### 2.5 Potential next steps
+### 2.5 Potential next steps (with CTA)
 Here I describe potential next steps, both to improve existing solution limits, but also to explore completely new techniques/tools (e.g. vLLM)
 #### 2.5.1 Pushing Local Limits: Deeper Quantization vs MLX (Apple Silicon native)
 #### 2.5.2 Performance Analysis: Finding the theoretical max (Compute/Mem bound)

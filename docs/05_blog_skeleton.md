@@ -1,27 +1,18 @@
 # Blog Skeleton
 
-## MetaData / Strategy: From Toy to Tool
-
-**Blog Series Title**: *From Toy to Tool: The Engineering Reality of Local SLMs*
+**Blog Series Title**: *From Toy to Tool: end-to-end SLM application*
 
 **The Focus**:
-*   This is **not** a tutorial on "how to run a model".
-*   This **is** a deep dive into the **lifecycle of specialized Small Language Models (SLMs)**.
+*   This is **not** a tutorial on "how to run a model". This **is** a deep dive into the **lifecycle of specialized Small Language Models (SLMs)**.
 *   We treat the SLM not as a magical black box, but as a engineered software component: finetuned for a specific job (Airflow DSL), deployed with specific constraints (Local/Privacy), and integrated into specific workflows (Unix Pipes & Agentic IDEs).
 
-**The Target Audience**:
-*   **The Disenchanted Practitioner**: ML Engineers and Data Pros who are tired of generic "Chat with your PDF" demos and want to see rigorous application of SLMs.
-*   **The Local-First Developer**: Engineers who value privacy, zero-latency, and offline capability, and want to know if local SLMs are actually viable for code generation.
-*   **The Agent Builder**: People looking to build complex systems where low-cost, high-speed local models act as "function routers" or "drafters" for larger cloud models.
-
 ---
-The blog will be divided into 3 main parts:
-1. I explain how am I and why I am cool and the overarching objective
-2. I fine tune a model and evaluate it
-3. I deploy it locally
 
 
-## 0. Intro
+
+## Part 1: Context & Data Strategy
+I explain who I am, the objective of the whole series and the data preparation. Here I higlight that, compared to classical ML where a lot of feature engineering is required, SLMs are more like a black box that extract their own features. We need to focus on the data collection and data quality.
+### 0. Intro: The Scars of a Classical ML Engineer
 Who am I?
 I am a practitioner coming from classical ML (e.g. differences against classical ML, stack/algorithms for training and inference LLM/SLM). - SHARE SMALL PARTS OF MY JOURNEY USING MY RESUME, -  I've started as analyst from mgmgt engineering and I am now working as a data/ML engineer in one of the biggest eu scaleup, Flix. I've always had big passion for AI since when it was called DL (with some sporadic projects I've worked in).
 I have started not knowing much about ML and data, but I have been learning myself over the years and grew till senior.  
@@ -57,7 +48,7 @@ The code contains both the research code and a working CLI and MCP server that I
 I'd be really happy if you will share some feedbacks, questions or suggestions for next series.
 
 
-## 1. Part 1: Fine tune the SLM
+### 1. Part 1: Fine tune the SLM
 The idea is to showcase that the process of finetuning an SLM locally is similar to standard model development process: from gathering the data to evaluate it, as defined in some books like ml system design.  
 I want to show that the process is not that different from standard model development and, if you are an experienced data practitioner, you should find it familiar.
 
@@ -73,17 +64,19 @@ Main assumptions/ideas:
 
 ### 1.2 Data Collection
 Coding is a difficult task: it requires perfect sintax knowledge of the language, knowledge of the language idiom (ie., airflow) and the ability to follow instructions to generate something working and useful.
-To make sure the SLM is learning to write airflow dags, I'll start the dataset with official examples, per different airflow version, directly taken from airflow official github so that I am sure I am following the airflow way of doing things. 
+To make sure the SLM is learning to write airflow dags, I'll start the dataset with official examples, per different airflow version, directly taken from airflow official github so that I am sure I am following the airflow way of doing things. Specifically, I curated a dataset of **~10,000 samples**, where **65% (6.5K)** are official Airflow DAGs.
 Obviously this can be extended to unofficial examples, but with the risk of learning bad practices and would require lot of process to clean the data. 
 To make the model (which I'll talk in the next session) remember also python syntax, I'll also use magpie dataset, which is a dataset of extracted code from Qwen 2.5 Coder (our base model) - ADD REFERENCES ON MAGPIE - 
 Same goes for using the LLM to generate dag files: high risk of model hallucination plus the cost of using an LLM to generate the dataset.
 
 ### 1.3 Data Preprocessing
 The airflow dataset has been created asking an LLM (in this case I've created a client for Claude API) to generate 3 instructions per dag file collected. The instructions are generated in a way that they are slightly different from each other for the same dag file. The augmentation is useful to have more data, since SLM/LLM are data hungry. 
-From 04_project_learning.md: I've decided to generate **3 instructions per request**. This proved to be really cost effective using batch messages (since I don't have latency requirements), I spent <$2 (with one request for one instruction at time >$5).
-I've also cleaned up the dag files, since they were containing lot of comments upfront which I didn't want the model to learn. I didn't instead remove or add internal libraries/imports for time reasons, hoping the model will learn how to cope with that (we'll see later on that is not the case).
+From 04_project_learning.md: I've decided to generate **3 instructions per request**. This proved to be really cost effective using **Claude's Batch API** (since I don't have latency requirements), I spent <$2 (with one request for one instruction at time >$5).
+I've also cleaned up the dag files, since they were containing lot of comments upfront which I didn't want the model to learn. This "chatter" (copyright headers, verbose docstrings) wastes context tokens and confuses the model, so I aggressively stripped them to force focus on the logic. I didn't instead remove or add internal libraries/imports for time reasons, hoping the model will learn how to cope with that (we'll see later on that is not the case).
 I have made sure to have enough data to train the model, and kept also python related instructions (again from magpie, no instruction generation needed) to avoid catastrophic forgetting. 
 Finally, I've applied the ChatML format, with which Qwen coder 2.5 Instruct is compatible - SHORT PRIMER ON TEMPLATE FORMATS -  
+
+## Part 2: Fine-Tuning & Evaluation
 
 ### 1.4 Model Selection
 I have opted for using Qwen coder 2.5 1.5B Instruct, since it is open source, specialised in coding (which, as said, is more complex that simple writing) and it can fit into my local stack. 
@@ -103,7 +96,10 @@ Moreover, to speed up the process, I've used Unsloth, which is a library with op
 I just show the overall script, without going into details on the code. I'll just highlight if I did anything particular, besides the aformentioned optimisations. It's just plain unsloth script.
 
 ### 1.6 Model Evaluation
-I've used a custom ast and airflow dag parser (CTA to help me and link of the code) + using LLM as a judge - LINK TO LLM EVALs blog recommended - The LLM as a judge prompt as been fine tuned based on the ground truth data (that should be considered good).
+I implemented a **3-Tier Validation Pipeline** to ensure quality beyond just loss curves:
+1.  **Syntax Check**: A standard Python AST parser to catch syntax errors immediately.
+2.  **Domain Check**: A custom Airflow parser that verifies unique `task_id`s and valid dependency chains (no cycles).
+3.  **Style Check**: An LLM-as-a-Judge to grade idiomatic Airflow usage.
 The model has been evaluated on a set of airflow dags, highlighting that it has learned to write airflow dags with its specific sintax. Compared to the baseline model, it has shown to have learned specific airflow syntax, like operators.
 I'll also show some of the pitfalls of the current approach:
 1. catastrophic forgetting on python syntax -> add python data
@@ -121,7 +117,7 @@ Asking also the crowd feedback on what I could improve or what they'd like to se
 
 
 
-## 2. Deployment
+## Part 3: Deployment - The Engineering Reality
 Here the objective is instead to highight the engineering effort on the inference side.
 In fact, wheter locally or in cloud, the inference process is different compared to the training phase, which is something new on the ML landscape. The fact that there are specific trick to speed up inference (e.g. KV cache, paged attention etc.) and that there are specific tools to deploy the model (e.g. vLLM, LLM Cache) are something new on the ML landscape.
 In this blog I'll dive a bit on how to deploy an LLM locally, building a chatbot CLI and an MCP server utilisable via e.g. Claude code.
@@ -136,22 +132,14 @@ Finally I want to show how I optimised my local inference and what are the 2 way
 #### 2.2.2 What are the most common techniques to improve inference performance (GGUF, Quantization internals, KVCache, FlashAttn)
 #### 2.2.3 Why I opted for Llama.cpp
 Intro on what is llama.cpp and why it is so fast. Then I show the benchmarks and analysis.
+My benchmarks on a **Mac Pro M1 (16GB)** were revealing:
+*   **HuggingFace Transformers (CPU)**: 4.19 t/s (Too slow for interactive use)
+*   **llama.cpp (Metal)**: 64.52 t/s (**15x speedup**, viable for real-time code generation)
+*   **Parallel Requests**: Reaching up to **184 t/s** throughput.
 * Metric 1: Tokens/sec (The obvious one)
 * Metric 2: RAM usage (Critical for local)
 * Metric 3: Model Quality (Did Q4 quantization break the code syntax?)
 * Analysis: Compute vs Memory Bound bottlenecks (Why Mac is bandwidth starved)
-#### 2.2.4 My inference engine
-I explain why simply running the server isn't enough - we need a "Brain" to control it.
-*   **The Abstraction Layer**: Why I built `engine.py` instead of raw API calls everywhere.
-    *   *Separation of Concerns*: Decoupling the LLM backend from the application logic (CLI/MCP).
-*   **Implementation Details**:
-    *   **Universal Client**: I use the standard `openai` Python SDK to connect to `llama.cpp`.
-        *   *Benefit*: It makes the backend swappable (e.g., to GPT-4 or vLLM) without code changes.
-    *   **Prompt Engineering as Code**: Encapsulating the "Airflow Expert" persona.
-        *   Injecting System Prompts and handling ChatML formatting transparently.
-    *   **Robust Output Parsing**: Solving the "Chatty Model" problem.
-        *   Implementation of `_extract_code` to strip markdown fences and comments, ensuring clean executable Python code.
-    *   **Deterministic Configuration**: Enforcing `temperature=0.1` for reliable code generation.
 
 ### 2.3 Deployment Architecture 1: The CLI (Human-to-Model Interface)
 *   **The Concept**: Treating SLMs as "Unix Utilities".
@@ -163,6 +151,7 @@ I explain why simply running the server isn't enough - we need a "Brain" to cont
 
 ### 2.4 Deployment Architecture 2: The MCP Server (Agent-to-Model Interface)
 *   **The Concept**: The "Microservice" for AI Agents.
+    *   **The Specialist Delegator Pattern**: A generalist agent (like Claude) delegates niche, verbose tasks (writing Airflow DAGs) to the local specialist (AirflowNet) to save costs and reduce latency.
     *   Instead of a human chatting with the model, we expose the SLM as a "Tool" for other, smarter models (like Claude in Cursor or Windsurf).
 *   **Why this changes the game for SLMs**:
     *   *Specialization*: Your general IDE Agent (Claude) doesn't need to know every Airflow edge case. It can delegate that to your fine-tuned expert SLM.

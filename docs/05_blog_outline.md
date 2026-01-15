@@ -1,6 +1,6 @@
 # Blog Series: From Toy to Tool – The Lifecycle of a Specialized SLM
 
-**The Focus**: This is not a "hello world" tutorial. This is a deep dive into the engineering lifecycle of specialized Small Language Models (SLMs)—treating them not as magic black boxes, but as software components: engineered, fine-tuned, and deployed into Unix pipes and Agentic workflows. This is somethig that I struggled to find online, so I'm sharing my journey.
+**The Focus**: This is not a "hello world" tutorial. This is a deep dive into the engineering lifecycle of specialized Small Language Models (SLMs)—treating them not as magic black boxes, but as software components: engineered, fine-tuned, and deployed into Unix pipes and Agentic workflows. This is something that I struggled to find online, so I'm sharing my journey.
 > **Voice Note**: Keep it raw. Admit what you don't know. This isn't a "thought leader" piece; it's a "fellow engineer sharing battle scars" piece.
 
 ---

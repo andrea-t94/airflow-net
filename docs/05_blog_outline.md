@@ -1,159 +1,342 @@
-# Blog Series: From Toy to Tool – The Lifecycle of a Specialized SLM
+# Blog Series: From Toy to Tool – Fine-Tuning an SLM for Airflow DAGs
 
-**The Focus**: This is not a "hello world" tutorial. This is a deep dive into the engineering lifecycle of specialized Small Language Models (SLMs)—treating them not as magic black boxes, but as software components: engineered, fine-tuned, and deployed into Unix pipes and Agentic workflows. This is something that I struggled to find online, so I'm sharing my journey.
-> **Voice Note**: Keep it raw. Admit what you don't know. This isn't a "thought leader" piece; it's a "fellow engineer sharing battle scars" piece.
-
----
-
-## Part 1: Context & Data Strategy
-*Theme: The shift from Feature Engineering to Data Curation.*
-> **Focus**: I explain who I am, the objective of the series, and the data preparation strategy. The key highlight: unlike Classical ML where we obsess over feature engineering, with SLMs we treat the model as a black box and obsess over **data collection** and **data quality**.
-
-
-### 0. Intro: Learnings from a Classical ML Engineer
-*   **The Persona**: I’m a Senior MLE at Flix (Experience: CausalML, churn prediction, tabular data). I grew up in the world of "Classical ML"—where we spent weeks hand-crafting features and checking SHAP values.
-    *   *Detail*: Mention specific old-school struggles: "I used to spend weeks engineering 'rolling_avg_7d' features. Now I spend weeks cleaning JSONL files."
-*   **The Shift**: SLMs represent a new reality. We don't engineer features anymore; we focus on **data collection** and **data quality**.
-*   **The Goal**: I want to demystify this shift. I’m building **AirflowNet**—an SLM specialized in writing Airflow DAGs—to show you the end-to-end process, from data collection to local deployment. No hype, just engineering.
-    *   *Voice Check*: Explicitly state: "I started knowing nothing about this. I learned by breaking things."
-
-### 0.1 Why am I doing this?
-*   **The Motivation**: As an experienced ML practitioner, I need to stay current. It's essential (and fun).
-*   **The Journey**: This is "Learning by Doing." Unlike university (theory first), this is engineering-first.
-*   **The Roadmap**: Starting with *Application* (this series), then moving to *Internals* (building LLMs from scratch, kernels) later.
-
-### 0.2 Why you should read this?
-*   **Target Audience**: NOT for beginners. For **Data/ML Engineers** with solid backgrounds who feel left behind by the GenAI hype train.
-*   **The Gap**: Most content is either pure theory or "toy" tutorials. This is the **missing middle**: pragmatic, end-to-end engineering.
-*   **The Promise**:
-    1.  **Future-Proofing**: SLMs will be standard for secure, cost-effective tasks.
-    2.  **Familiarity**: I’ll prove that 80% of this process is just "Classical ML" with new names.
-
-
-### 1.1 Objective
-*   **The Task**: Fine-tune an SLM to be an expert in Airflow DAG generation.
-*   **Context: What is Airflow?**: Briefly, it's *the* standard for data orchestration. We need to generate valid Python files defining DAGs (Directed Acyclic Graphs) and Operators.
-*   **Why SLMs?**: Unlike generalist LLMs (chatty, expensive, external), a specialized SLM is predictable, private, and runs locally. It’s a tool, not a chatbot.
-*   **The Approach**: Knowledge Distillation. We use a smart teacher (Claude) to train a specialized student (Qwen).
-    *   *Reference*: [Distill Labs / Knowledge Distillation papers]
-    *   *Voice Check*: "At this stage, I frankly didn't care if the model was perfect. I just wanted to see if the *pipeline* worked."
-
-### 1.2 Data Collection: The Foundation
-*   **The Challenge**: Coding models need perfect syntax *and* idiomatic domain knowledge.
-*   **The Dataset Strategy (~10,000 samples)**:
-    *   **65% (6.5k) Domain Expert**: Official Airflow DAGs scraped from the official repo (guaranteeing "best practice" patterns).
-        *   *Engineer Note*: "I could have scraped unofficial repos for more data, but I was terrified of the model learning bad practices. Garbage in, garbage out."
-    *   **35% (3.5k) Generalist Anchor**: Python samples from the **Magpie dataset** to prevent "catastrophic forgetting" of basic Python syntax.
-        *   *Reference*: [Magpie Dataset Paper/Repo]
-
-### 1.3 Data Preprocessing: Quality over Quantity
-*   **The "Aha!" Moment**: Raw code is noisy. Copyright headers and verbose docstrings are "chatter" that wastes context.
-    *   *Action*: Aggressively stripped comments to force the model to focus on the logic.
-    *   *Reality Check*: "I deleted 30% of my token count. It felt wrong, but noise is the enemy of small models."
-    *   *Visual*: **[Show a Before/After Diff of a 'Cleaned' DAG]**
-*   **Cost Efficiency**: Used **Claude’s Batch API** to generate instructions.
-    *   *Win*: Reduced cost for ~10k instructions from **>$5 to <$2**.
-*   **Formatting**: Standardized everything to **ChatML** format to match Qwen’s instruction template.
-    *   *Primer*: Models don't see text; they see tokens. Using the correct special tokens (`<|im_start|>`, `<|im_end|>`) is critical for the model to understand role boundaries.
-
-### 1.4 Conclusion & Next Steps
-*   **Recap**: We built a clean, consistent dataset effectively ($2).
-*   **Next Steps (Room for Improvement)**:
-    1.  **Cleaner Code**: Aggressively filter "internal/private" libraries (e.g., `from my_company.utils import x`) which confuse the model.
-        *   *Lesson*: "The model memorized `import my_company.utils` from the training set. Classic overfitting."
-    2.  **More Data**: Scale beyond 10k by scraping unofficial repos (carefully) or generating more synthetic examples.
-*   **CTA**: "How do you balance data quantity vs. quality in your fine-tuning pipelines? Share your strategies."
+**Series Structure:** 2 parts, ~2500-3000 words each
+**Target Audience:** Data/ML engineers with solid Python and classical ML background who want to understand the end-to-end SLM fine-tuning process
 
 ---
 
-## Part 2: Fine-Tuning & Evaluation
-*Theme: Treating the Model as a Software Component.*
-> **Focus**: I demonstrate that the SLM development lifecycle is strikingly similar to Classical ML. It is not "fire and forget"; it is an iterative loop of **Train → Evaluate → Identify Issues → Repeat** (often circling back to data collection). I show how we apply this rigorous feedback loop to fine-tuning.
+## Part 1: Fine-Tuning an Airflow SLM (And Why It Hallucinated More Than the Baseline)
 
+**Core Promise:** Show the complete fine-tuning loop—data collection through evaluation—while being honest about what worked and what didn't.
 
-### 2.1 Model Selection
-*   **The Choice**: **Qwen 2.5 Coder (1.5B)**.
-    *   *Alternative Considered*: Deepseek V3 (SOTA, but too large/complex for this specific local distillation experiment).
-*   **The Why**:
-    *   **Size**: 1.5B fits comfortably on a Mac M1.
-    *   **Specialization**: It’s already pre-trained on code, making it a "SOTA" base for this task.
-        *   *Link*: [HuggingFace: Open Source LLMs](https://huggingface.co/blog/daya-shankar/open-source-llms), [LiveBench Leaderboard](https://livebench.ai/#/?sort=Coding+Average)
-    *   **License**: Fully Open Source.
-        *   *Link*: [Qwen 2.5 Coder 1.5B Instruct](https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct)
+**Opening Hook (2-3 paragraphs):**
 
-### 2.2 Fine-Tuning: The Optimization Stack
-*   **The Constraint**: Training is expensive (quadratic memory).
-*   **The Solution Stack**:
-    *   **Hardware**: A100 (via Colab Pro) for speed vs T4.
-        *   *Contrast*: "T4 is free but slow. A100 costs money but saves sanity. I chose sanity."
-    *   **Software**: **Unsloth** (optimized kernels) + **QLoRA** (4-bit quantization + LoRA).
-        *   *Reference*: [Unsloth AI], [QLoRA Paper]
-    *   *Result*: Drastic reduction in VRAM usage and training time.
-    *   *Commentary*: "Without Unsloth, I was OOM-ing instantly on Colab. It's not just an optimization; it's an enabler."
+Don't start with "who I am." Start with the punchline that makes readers want to continue.
 
-### 2.3 Evaluation: The 3-Tier Validation Pipeline
-*   **The Problem**: Loss curves don't tell you if code runs.
-*   **The Solution**: A multi-stage validation pipeline:
-    1.  **Syntax Check**: Standard Python `ast.parse()` to catch syntax errors instantly.
-    2.  **Domain Check**: Custom Airflow parser (Unique `task_id`s, acyclic graph checks).
-    3.  **Style Check**: **LLM-as-a-Judge** to grade idiomatic usages (e.g., using the right Operators).
+Opening should be something like: *"I fine-tuned a 1.5B parameter model to write Airflow DAGs. It learned to use the right operators 4x more often than the baseline. It also hallucinated internal test utilities that don't exist in production Airflow. Both of these results came from the same training data."*
 
-### 2.3.1 Learnings & Pitfalls
-*   **Honest Failures**:
-    1.  **Hallucinations**: The model invents parameters for niche operators it hasn't seen enough.
-    2.  **Complexity Ceiling**: Performance degrades on very long, complex DAGs (context window limits).
-    3.  **Overfitting**: It memorized some internal library imports from the Training Set (oops).
+This immediately establishes: (1) you did real work, (2) you have specific numbers, (3) the story is nuanced, not a victory lap.
 
-### 2.4 Conclusion & Next Steps
-*   **Recap**: We established a rigorous Train-Eval loop.
-*   **Next Steps**:
-    1.  **Scale Up**: Train larger models on multiple GPUs.
-    2.  **Engineering**: Experiment with dynamic quantization and distributed training techniques.
-*   **CTA**: "What other validation metrics are crucial for code generation in your experience? Let's discuss."
+Follow with a brief context setter: *"I'm a senior MLE at Flix with a classical ML background. When I started this project, I expected fine-tuning language models to feel completely foreign. It didn't. The process is remarkably similar to what we already do—collect data, train, evaluate, identify issues, iterate. The tools have different names, but the loop is the same."*
+
+Then state what the post covers: the data strategy, training setup, and evaluation pipeline—with emphasis on the failures and what they taught you.
 
 ---
 
-## Part 3: Deployment – The Engineering Reality
-*Theme: Inference is a different beast than Training.*
-> **Focus**: I highlight the engineering reality of running these models. We shift focus from training throughput to inference latency and memory bandwidth. I show how to wrap the raw model into usable software architectures (CLI & MCP) that integrate into real workflows.
+### Section 1: The Evaluation Results (Start Here, Not at the End)
 
+**Why lead with results:** Readers want to know if this is worth their time. Showing the outcomes first hooks them, then they'll want to understand how you got there.
 
-### 3.1 The Inference Landscape
-*   **The Reality**: Training is about throughput; Inference is about latency and memory bandwidth.
-    *   *Deep Dive*: Brief explanation of **GGUF** (file format), **KVCache** (memory optimization), and **FlashAttn** (speed optimization).
-*   **The Stack**: Moved from Python transformers (slow) to **llama.cpp** (optimized C++ inference).
+**Content to include:**
 
-### 3.2 Benchmarks: The Speed of Local
-*   **Hardware**: Mac Pro M1 (16GB RAM).
-*   **The Numbers Speak**:
-    *   **HuggingFace Transformers (CPU)**: 4.19 t/s (Unusable for real-time).
-        *   *Voice*: "I waited 10 seconds for a 'Hello World'. I knew immediately this stack wouldn't scale."
-    *   **llama.cpp (Metal/GPU)**: **64.52 t/s** (15x speedup).
-    *   **Throughput**: **184 t/s** with parallel decoding.
-*   **Key Question**: Did **Q4 quantization** break the code?
-    *   *Result*: Surprisingly, no. Syntax remained valid, validating the Q4 strategy.
-*   **Analysis**: We are **Memory Bandwidth Bound**, not Compute Bound.
-    *   *Explanation*: "It's not about how fast the math is; it's about how fast we can move weights from RAM to the chip. Mac's Unified Memory is the cheat code here."
+Present the comparison table with actual numbers from your evaluation:
 
-### 3.3 Architecture 1: The CLI (Human-to-Model)
-*   **Philosophy**: The SLM as a "Unix Utility".
-*   **The Flow**: Pipe a request in, get a DAG out. (`echo "backup data daily" | airflow-net`)
-*   **Why**: Zero latency, 100% privacy, offline capable. It lives in your terminal alongside `grep` and `git`.
-    *   *User Experience*: it abstracts the model loading. You just type, it auto-spins up the server background process.
+| Metric | Baseline (Qwen 2.5 1.5B) | Fine-tuned | What This Means |
+|--------|--------------------------|------------|-----------------|
+| Syntax Validity | ~X% | ~X+8% | Fewer broken DAGs |
+| Idiomatic Airflow | 11% | 43% | Uses proper operators instead of PythonOperator wrappers |
+| Hallucination-free | 24% | 6% | **Worse**—learned test utilities from training data |
+| Instruction Following | 15% | 8% | **Worse**—overfitted to synthetic patterns |
 
-### 3.4 Architecture 2: The MCP Server (Agent-to-Model)
-*   **Philosophy**: The "Specialist Delegator" Pattern.
-*   **The Flow**:
-    1.  **Generalist (Claude)** in your IDE sees a task: "Write a complex Airflow DAG."
-    2.  **Delegation**: Claude recognizes it's a verbose task and calls the local **AirflowNet** tool (via MCP).
-    3.  **Execution**: AirflowNet generates the code for free locally.
-    4.  **Integration**: Claude reviews and inserts the code.
-*   **The Benefit**: Saves paid API tokens and leverages the specialist's fine-tuned domain knowledge.
-    *   *Analogy*: "Claude is the Architect; AirflowNet is the specialized Mason. The Architect doesn't need to lay every brick."
+**Key narrative beats:**
 
-### 3.5 Conclusion & Next Steps
-*   **Summary**: We moved from a "Toy" (a model in a notebook) to a "Tool" (a component in an Agentic system).
-*   **Next Steps**:
-    1.  **Inference Optimization**: Explore **MLX** (Apple Silicon native) or **vLLM** for high-throughput concurrency.
-    2.  **Compression**: Push quantization limits without breaking syntax.
-*   **CTA**: "The code is Open Source. I'd love your contributions—especially if you know how to squeeze more juice out of llama.cpp!"
+1. The good: 4x improvement in idiomatic usage means the model learned what Airflow-specific code looks like. It uses `SnowflakeOperator` instead of wrapping everything in `PythonOperator` with hooks.
+
+2. The bad (and interesting): The hallucination rate got *worse*. Root cause analysis revealed two problems:
+   - Training data included files from `tests_common/` directory—internal Airflow CI/CD utilities that don't exist in production
+   - The model confidently generates `from tests_common.test_utils.system_tests import get_test_run` because it saw this pattern repeatedly
+
+3. The ugly: Instruction following degraded because 85.7% of training examples used "20" as a dummy number ("insert 20 records," "20 retries," "20 seconds"). The model learned that all numbers should be 20.
+
+**Transition:** "These results didn't come from nowhere. They came from specific choices in data collection and preprocessing. Let me walk through what I did and why these failures were predictable in hindsight."
+
+---
+
+### Section 2: Data Strategy—Where the Problems Started
+
+**The Setup (1-2 paragraphs):**
+
+Explain the core difference from classical ML: *"In classical ML, I spent weeks engineering features—rolling averages, interaction terms, careful normalization. With SLMs, the model extracts its own features. Our job shifts from feature engineering to data curation. The model will learn whatever patterns exist in your data, including patterns you didn't intend to teach it."*
+
+**Dataset Composition (~10k samples):**
+
+Present this as prose, not a bulleted breakdown:
+
+*"I built the dataset from two sources. About 65% (6,500 samples) came from the official Apache Airflow repository—DAG files that represent best practices. The remaining 35% came from the Magpie dataset, general Python code meant to prevent catastrophic forgetting of basic syntax. The ratio was somewhat arbitrary; I wanted enough Airflow-specific examples to specialize the model without losing general Python competence."*
+
+**The Instruction Generation Process:**
+
+This is where you explain how you created instruction-response pairs:
+
+*"Raw code isn't a training dataset. You need (instruction, response) pairs. I used Claude's Batch API to generate three different instructions per DAG file—variations on 'write a DAG that does X.' The Batch API was a revelation: generating 10k instructions cost under $2, compared to $5+ with synchronous requests. No latency requirements meant I could wait for batch processing."*
+
+**Preprocessing Decisions (and their consequences):**
+
+Walk through what you did and connect it to the evaluation failures:
+
+1. **Stripped comments and docstrings:** "I removed copyright headers and verbose docstrings to reduce noise. The model should learn logic, not boilerplate. This worked as intended."
+
+2. **Didn't filter test files:** "I scraped the entire Airflow repo without excluding the `tests/` and `tests_common/` directories. This seemed fine at the time—more data is better, right? Wrong. The model learned to import `tests_common.test_utils.system_tests` because those files were in the training set. Classic garbage-in, garbage-out."
+
+3. **Synthetic instruction homogeneity:** "When Claude generated instructions, it defaulted to using '20' as a placeholder number constantly. I didn't catch this during data inspection. The model learned that '20' is the universal correct answer for any numerical parameter."
+
+**Show a concrete before/after example:**
+
+Include an actual diff or side-by-side comparison of a raw DAG file vs. the cleaned version. This makes the preprocessing tangible.
+
+**The Lesson (explicit):**
+
+*"Data preprocessing for SLMs isn't about feature scaling or encoding categoricals. It's about understanding what patterns you're implicitly teaching. Every file in your training set is a lesson. Every repeated pattern becomes a learned behavior."*
+
+---
+
+### Section 3: The Training Setup
+
+**Hardware Reality (1 paragraph):**
+
+*"I don't own GPUs. I used Google Colab Pro with an A100. The free T4 tier works but training takes 3-4x longer. For a 1.5B model on 10k samples, A100 training completed in about 40 minutes. On T4, expect 2-3 hours."*
+
+**The Optimization Stack (explain why, not just what):**
+
+Present this as a natural explanation, not a feature list:
+
+*"Training transformers is expensive—memory scales quadratically with sequence length. A 1.5B model with 2048 context would normally require 40GB+ VRAM. I used two techniques to make this feasible on Colab:"*
+
+1. **QLoRA:** "Instead of updating all 1.5 billion parameters, LoRA freezes the base model and trains small adapter matrices. QLoRA adds 4-bit quantization to the frozen weights. Result: training fits in 16GB VRAM with minimal quality loss."
+
+2. **Unsloth:** "Optimized Triton kernels for the LoRA forward/backward pass. Without Unsloth, I was hitting OOM errors even with QLoRA. With it, training was stable and roughly 2x faster than standard HuggingFace."
+
+**Model Selection (brief):**
+
+*"I chose Qwen 2.5 Coder 1.5B Instruct. It's small enough to run locally on my M1 Mac, already specialized for code, and genuinely open source. Deepseek is technically better on benchmarks, but at 671B parameters it defeats the purpose of local deployment."*
+
+**What I'd Change:**
+
+*"Looking back, I'd spend more time on data quality and less on training optimization. The model learned exactly what I taught it—including the bugs in my dataset. No amount of clever training tricks fixes bad data."*
+
+---
+
+### Section 4: The Evaluation Pipeline
+
+**The Problem (1 paragraph):**
+
+*"Loss curves don't tell you if code runs. A model can achieve low perplexity while generating syntactically broken DAGs. I needed evaluation that matched how the code would actually be used."*
+
+**The 3-Tier Pipeline:**
+
+Present each tier with its purpose and implementation:
+
+**Tier 1: Syntax Validation**
+*"Standard Python AST parsing. If `ast.parse()` fails, the DAG is unusable. This catches missing colons, unbalanced parentheses, and invalid Python. It's the minimum bar."*
+
+**Tier 2: Domain Validation**
+*"A custom Airflow parser that checks Airflow-specific constraints: unique task IDs (duplicates cause silent overwrites), acyclic dependencies (cycles prevent DAG loading), and presence of actual DAG definitions (not just Python code). This catches code that's valid Python but broken Airflow."*
+
+**Tier 3: Semantic Evaluation (LLM-as-Judge)**
+*"Structural validity doesn't mean the code is good. I used Claude Sonnet to grade valid DAGs on three criteria:"*
+
+- Idiomatic usage: Does it use the right operators, or wrap everything in PythonOperator?
+- Hallucination check: Does it import non-existent modules or use fake parameters?
+- Instruction adherence: Does it actually do what was asked?
+
+*"The LLM judge revealed problems the parser couldn't catch—like the test utility imports that are valid Python but don't exist in production Airflow."*
+
+**Cost Note:**
+
+*"Running 1,000+ evaluations through Claude's Batch API cost about $X. Cheaper than I expected, and the qualitative feedback was invaluable for understanding failure modes."*
+
+---
+
+### Section 5: What I'd Do Differently
+
+**Keep this concrete and actionable:**
+
+1. **Filter training data aggressively:** "Exclude everything under `tests/`, `test_*.py`, and any file importing from non-public namespaces. The 15 minutes spent on filtering would have saved hours of debugging hallucinations."
+
+2. **Audit synthetic data for homogeneity:** "Sample 50-100 generated instructions and look for repeated patterns before training. The '20' problem was obvious in hindsight but invisible when I was focused on volume."
+
+3. **Start with smaller experiments:** "I trained on 10k samples immediately. I should have trained on 1k first, evaluated, identified issues, then scaled. The iteration loop matters more than the dataset size."
+
+**Closing for Part 1:**
+
+*"The fine-tuned model is better at writing Airflow code than the baseline—when it works. The failures taught me more than the successes. In Part 2, I'll cover deployment: getting this model running locally at 65 tokens/second on a Mac M1, and integrating it into actual development workflows."*
+
+---
+
+---
+
+## Part 2: Deploying an SLM Locally—65 Tokens/Second on a Mac M1
+
+**Core Promise:** Show the inference reality—why it's different from training, how to optimize for local hardware, and how to integrate the model into real workflows.
+
+**Opening Hook:**
+
+*"Training is about throughput—process as many samples as possible. Inference is about latency—generate tokens fast enough to be useful. These require completely different optimizations. A setup that's great for training can be unusable for inference."*
+
+Brief context: *"I wanted to run my Airflow model locally. No API calls, no cloud costs, no data leaving my machine. The challenge: making a 1.5B model responsive enough to use interactively."*
+
+---
+
+### Section 1: The Inference Landscape
+
+**Why Inference Is Different (2-3 paragraphs):**
+
+Explain the fundamental constraint shift:
+
+*"During training, you process batches in parallel—hundreds of sequences at once. GPU utilization is high because there's always work to do. During inference, you generate one token at a time, sequentially. Each token depends on all previous tokens. You can't parallelize the generation itself."*
+
+*"This makes inference memory-bandwidth bound, not compute bound. The bottleneck isn't how fast you can multiply matrices—it's how fast you can load model weights from RAM to the processor. On my M1 Mac, the GPU can do the math faster than memory can feed it data."*
+
+**The Stack Options (present as a journey, not a list):**
+
+*"I tried three approaches:"*
+
+1. **HuggingFace Transformers (CPU):** "4.19 tokens/second. I waited 10 seconds for 'Hello World.' Immediately ruled out for interactive use."
+
+2. **HuggingFace Transformers (MPS/Metal):** "Better, but still under 20 t/s. The Python overhead and lack of inference-specific optimizations hurt."
+
+3. **llama.cpp with Metal:** "64.52 tokens/second. 15x faster than the CPU baseline. This is what I shipped."
+
+**Why llama.cpp Won:**
+
+*"llama.cpp is C++ optimized specifically for inference. It uses GGUF model format (quantized weights in a single file), supports Metal acceleration on Mac, and implements KV-cache to avoid recomputing attention for previous tokens. The Python wrapper (`llama-cpp-python`) gives you the speed without leaving the Python ecosystem."*
+
+---
+
+### Section 2: Quantization—Did It Break the Code?
+
+**The Concern:**
+
+*"I quantized the model to Q4 (4-bit weights) to fit in memory and improve throughput. The obvious question: does aggressive quantization break code generation? Syntax is unforgiving—one wrong character and the code doesn't run."*
+
+**The Test:**
+
+Describe your validation approach:
+
+*"I ran the same evaluation pipeline from Part 1 on the quantized model. Syntax validity, domain checks, LLM grading—the full suite."*
+
+**The Results:**
+
+*"Surprisingly, Q4 quantization didn't significantly degrade code quality. Syntax error rates were within 1-2% of the full-precision model. The model still made the same semantic mistakes (test utility hallucinations, instruction following issues), but quantization didn't add new failure modes."*
+
+*"This matches what others have found: code generation is more robust to quantization than tasks requiring precise numerical reasoning. The model needs to get tokens right, not floating-point values."*
+
+**Show a concrete example:**
+
+Include a side-by-side of the same prompt with FP16 vs Q4 output, demonstrating equivalent quality.
+
+---
+
+### Section 3: Benchmark Numbers (Your Actual Hardware)
+
+**Be specific about the setup:**
+
+*"All benchmarks on Mac Pro M1 with 16GB unified memory, running macOS Sonoma. Model: Qwen 2.5 Coder 1.5B Instruct, Q4_K_M quantization, 2048 context length."*
+
+**The Numbers:**
+
+| Configuration | Tokens/Second | Notes |
+|--------------|---------------|-------|
+| HuggingFace CPU | 4.19 | Unusable for interactive work |
+| HuggingFace MPS | ~18 | Acceptable but sluggish |
+| llama.cpp Metal | 64.52 | Primary configuration |
+| llama.cpp batch=8 | 184 | Throughput mode for bulk generation |
+
+**Interpretation:**
+
+*"At 65 t/s, the model generates a typical DAG (200-400 tokens) in 3-6 seconds. That's fast enough to be useful in a development workflow—comparable to waiting for a linter or test suite."*
+
+*"The 184 t/s throughput mode uses parallel decoding for batch inference. Useful for generating test sets or evaluation samples, not for interactive use."*
+
+---
+
+### Section 4: Integration—CLI and MCP Server
+
+**The Goal:**
+
+*"A model that only runs in a Jupyter notebook isn't a tool. I wanted two integration points: a CLI for quick generation and an MCP server for IDE integration."*
+
+**CLI Design:**
+
+Describe the actual interface:
+
+```bash
+# Generate a DAG from a prompt
+airflownet generate "Create a DAG that extracts data from S3, transforms with pandas, and loads to Snowflake"
+
+# Interactive chat mode
+airflownet chat
+```
+
+*"The CLI handles server lifecycle automatically. If the llama.cpp server isn't running, it spawns one in the background. No manual setup required."*
+
+**MCP Server (for Cursor/Claude integration):**
+
+*"MCP (Model Context Protocol) lets you expose tools to AI-powered IDEs. I wrapped the generation endpoint as an MCP tool, so I can ask Cursor to 'generate an Airflow DAG for this task' and it calls my local model."*
+
+Show the actual integration:
+
+*"The server runs on `localhost:8000` with an OpenAI-compatible API. Any tool that speaks to OpenAI can point at the local server instead."*
+
+**Architecture Diagram:**
+
+Include a simple diagram showing:
+```
+User → CLI/MCP → Server Manager → llama.cpp Server → Model (GGUF)
+```
+
+---
+
+### Section 5: What I Learned About Local Inference
+
+**Memory Bandwidth Is Everything:**
+
+*"On consumer hardware, you're almost always memory-bound. The M1's 200GB/s memory bandwidth determines throughput more than its GPU compute capability. This is why quantization helps so much—smaller weights mean fewer bytes to move."*
+
+**Quantization Is Free (For Code):**
+
+*"I expected Q4 quantization to hurt quality. It didn't. For code generation, the precision loss is negligible. This might not hold for tasks requiring numerical reasoning, but for syntax-heavy generation, aggressive quantization is a free performance win."*
+
+**The Python Wrapper Is Fine:**
+
+*"I initially tried running the raw llama.cpp C++ server, expecting the Python wrapper to add latency. The overhead was negligible—within 5% of raw C++ performance. Use whatever's easier to integrate."*
+
+---
+
+### Section 6: What's Next
+
+**Keep this honest about limitations and future work:**
+
+1. **Data quality:** "The hallucination problem from Part 1 persists regardless of inference optimization. Better data filtering would improve results more than any inference trick."
+
+2. **Larger models:** "1.5B is the limit for comfortable M1 inference. With a beefier Mac (M2 Ultra, 64GB+) or dedicated GPU, 7B models become viable. The same optimization stack applies."
+
+3. **Speculative decoding:** "For even faster inference, speculative decoding uses a smaller draft model to propose tokens that the main model verifies. I haven't implemented this yet, but it's the logical next step for latency reduction."
+
+**Closing:**
+
+*"The goal was a model that runs locally, generates valid Airflow DAGs, and responds fast enough to be useful. At 65 t/s on a Mac M1, that goal is met—with caveats. The model is better than baseline at idiomatic Airflow code but still hallucinates when it hits edge cases in the training data."*
+
+*"The tools are accessible. Colab for training, llama.cpp for inference, a few hundred lines of Python for integration. The hard part isn't the infrastructure—it's the data. Get that right and the rest follows."*
+
+---
+
+---
+
+## Appendix: Style Reminders for Writing
+
+When converting this outline to prose:
+
+1. **Don't bold everything.** Use bold sparingly for key terms on first introduction.
+
+2. **Write in paragraphs.** The tables and lists in this outline are for your reference. The actual post should flow as prose, with lists only where they genuinely help (like the benchmark comparison).
+
+3. **Cut the meta-commentary.** Don't write "In this section, we'll explore..." Just start exploring.
+
+4. **Keep code examples realistic.** When showing DAG code, use real operator names and plausible task structures.
+
+5. **Admit uncertainty.** "I suspect..." and "I haven't tested..." are fine. Don't claim comprehensive knowledge you don't have.
+
+6. **End sections without fanfare.** You don't need a summary sentence after every section. Sometimes you can just move to the next topic.
+
+7. **The CTAs should be specific.** Instead of "What do you think about fine-tuning?" try "Has anyone else seen the synthetic data homogeneity problem? I'm curious if there's a standard deduplication approach."
